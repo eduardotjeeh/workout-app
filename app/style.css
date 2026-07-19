@@ -1,0 +1,111 @@
+/* Mobile-first, grote tikvlakken voor gebruik in de sportschool. */
+:root {
+  --achtergrond: #111418;
+  --kaart: #1c2128;
+  --rand: #30363d;
+  --tekst: #e6edf3;
+  --gedempt: #8b949e;
+  --accent: #3fb950;
+  --accent-donker: #238636;
+}
+
+* { box-sizing: border-box; margin: 0; }
+
+body {
+  font-family: -apple-system, system-ui, sans-serif;
+  background: var(--achtergrond);
+  color: var(--tekst);
+  padding: env(safe-area-inset-top) 0 0 0;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+header { padding: 1rem 1rem 0.5rem; }
+h1 { font-size: 1.4rem; }
+.notitie { color: var(--gedempt); font-size: 0.9rem; margin-top: 0.25rem; }
+
+main { flex: 1; padding: 0.5rem 1rem 7rem; }
+
+.oefening {
+  background: var(--kaart);
+  border: 1px solid var(--rand);
+  border-radius: 12px;
+  margin-bottom: 1rem;
+  padding: 0.75rem;
+}
+.oefening h2 { font-size: 1.1rem; margin-bottom: 0.25rem; }
+.oefening .notitie { margin-bottom: 0.5rem; }
+
+.set {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem 0.25rem;
+  border-top: 1px solid var(--rand);
+  font-size: 1.15rem;
+}
+.set button.vink {
+  width: 2.4rem; height: 2.4rem;
+  border-radius: 50%;
+  border: 2px solid var(--gedempt);
+  background: none;
+  color: transparent;
+  font-size: 1.2rem;
+  flex-shrink: 0;
+}
+.set.gedaan button.vink {
+  background: var(--accent-donker);
+  border-color: var(--accent);
+  color: white;
+}
+.set.gedaan .waarden { color: var(--gedempt); }
+
+.waarden { display: flex; gap: 0.5rem; align-items: baseline; }
+.waarden input {
+  width: 4.2rem;
+  font-size: 1.15rem;
+  text-align: center;
+  background: var(--achtergrond);
+  color: var(--tekst);
+  border: 1px solid var(--rand);
+  border-radius: 8px;
+  padding: 0.35rem 0.2rem;
+}
+.eenheid { color: var(--gedempt); font-size: 0.9rem; }
+
+footer {
+  position: fixed;
+  bottom: 0; left: 0; right: 0;
+  padding: 0.75rem 1rem calc(0.75rem + env(safe-area-inset-bottom));
+  background: var(--achtergrond);
+  border-top: 1px solid var(--rand);
+}
+
+.timer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.75rem;
+  font-size: 1.6rem;
+  font-variant-numeric: tabular-nums;
+}
+.timer button {
+  font-size: 1rem;
+  background: var(--kaart);
+  color: var(--tekst);
+  border: 1px solid var(--rand);
+  border-radius: 8px;
+  padding: 0.5rem 1rem;
+}
+.verborgen { display: none; }
+
+button.primair {
+  width: 100%;
+  font-size: 1.2rem;
+  padding: 0.9rem;
+  border: none;
+  border-radius: 12px;
+  background: var(--accent-donker);
+  color: white;
+}

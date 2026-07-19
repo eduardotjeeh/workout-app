@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#111418">
+  <title>Workout</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <h1 id="plan-naam">Laden…</h1>
+    <p id="plan-notitie" class="notitie"></p>
+  </header>
+
+  <main id="oefeningen"></main>
+
+  <footer>
+    <div id="timer" class="timer verborgen">
+      <span id="timer-tijd">0:00</span>
+      <button id="timer-stop" type="button">Stop rust</button>
+    </div>
+    <button id="afronden" type="button" class="primair">Sessie afronden</button>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,10 @@
+{
+  "name": "Workout",
+  "short_name": "Workout",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#111418",
+  "theme_color": "#111418",
+  "description": "Eigen workout-logger; plan uit de Gezondheid-hub, resultaten terug via workout-data.",
+  "icons": []
+}

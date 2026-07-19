@@ -1,0 +1,36 @@
+{
+  "versie": 1,
+  "gepland_op": "2026-07-19",
+  "naam": "Voorbeeld — Full body A",
+  "notitie": "Dit is voorbeelddata; het echte plan komt straks uit workout-data.",
+  "oefeningen": [
+    {
+      "naam": "Back squat",
+      "rust_sec": 150,
+      "notitie": "Diepte boven alles",
+      "sets": [
+        { "kg": 60, "reps": 5 },
+        { "kg": 60, "reps": 5 },
+        { "kg": 60, "reps": 5 }
+      ]
+    },
+    {
+      "naam": "Bench press",
+      "rust_sec": 120,
+      "sets": [
+        { "kg": 50, "reps": 8 },
+        { "kg": 50, "reps": 8 },
+        { "kg": 50, "reps": 8 }
+      ]
+    },
+    {
+      "naam": "Lat pulldown",
+      "rust_sec": 90,
+      "sets": [
+        { "kg": 45, "reps": 10 },
+        { "kg": 45, "reps": 10 },
+        { "kg": 45, "reps": 10 }
+      ]
+    }
+  ]
+}
