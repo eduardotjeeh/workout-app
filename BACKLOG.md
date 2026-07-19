@@ -21,9 +21,9 @@ Instellingenscherm met verbindingstest, plan ophalen + localStorage-cache voor o
 
 In `../Gezondheid`: `prompts/app-plan.md` (plan klaarzetten + weekplanning + verzetten/cancelen) en `prompts/app-import.md` (sessies → daglogs met reconciliatie); schema-adviescyclus en workout-coach omgezet naar de app-flow; beide prompts bevatten een Codex-aanwijzing (sessie starten in de bovenliggende `Projects`-map wegens sandboxrechten). Eerste echte plan (Full Body A herstart, 2026-07-21) staat in `workout-data`. Strong-import blijft bestaan voor de historie.
 
-## W5 — Strong-historie afsluiten
+## W5 — Strong-historie afsluiten ✅ (2026-07-19)
 
-Laatste Strong-export importeren, datum van overstap vastleggen in de hub, Strong-app mag met pensioen.
+Gecontroleerd: de laatste export (`2026-07-15-strong_workouts.csv`, 51 sessies van 2025-11-11 t/m 2026-06-16) is volledig gereconcilieerd met de daglogs in de Gezondheid-hub; er is daarna niet meer getraind. Overstapdatum 2026-07-21 vastgelegd in `schema.md`; `prompts/strong-import.md` is als historisch gemarkeerd. Strong mag met pensioen.
 
 ## W6 — Later / ideeën
 
