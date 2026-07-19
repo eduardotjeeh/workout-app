@@ -47,6 +47,7 @@ async function init() {
   elementen.appVersie.textContent = `versie ${APP_VERSIE}`;
   registreerServiceWorker();
   stelGebeurtenissenIn();
+  vraagWakeLock();
   vulInstellingenformulier();
   werkSyncStatusBij();
   await laadStartplan();
@@ -69,7 +70,12 @@ async function registreerServiceWorker() {
 }
 
 function stelGebeurtenissenIn() {
+  document.addEventListener("pointerdown", initAudio);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") vraagWakeLock();
+  });
   document.getElementById("timer-stop").addEventListener("click", stopTimer);
+  document.getElementById("timer-plus").addEventListener("click", () => verlengTimer(30));
   document.getElementById("oefening-toevoegen").addEventListener("click", voegOefeningToe);
   document.getElementById("afronden").addEventListener("click", rondSessieAf);
   document.getElementById("instellingen-open").addEventListener("click", openInstellingen);
@@ -168,6 +174,7 @@ function maakWerkplan(ruwPlan) {
     oefeningen: ruwPlan.oefeningen.map((oefening) => ({
       naam: oefening.naam,
       rust_sec: Number.isFinite(oefening.rust_sec) ? oefening.rust_sec : 0,
+      stap_kg: Number.isFinite(oefening.stap_kg) && oefening.stap_kg > 0 ? oefening.stap_kg : 2.5,
       notitie: oefening.notitie ?? "",
       extra: false,
       sets: oefening.sets.map((set) => ({
@@ -201,30 +208,38 @@ function renderOefeningen() {
 
     const kop = document.createElement("div");
     kop.className = "oefening-kop";
-    if (oefening.extra) {
+    if (oefening.extra || oefening.vervangen_van) {
       const naam = document.createElement("input");
       naam.className = "oefening-naam";
       naam.type = "text";
-      naam.placeholder = "Naam extra oefening";
+      naam.placeholder = oefening.vervangen_van ? "Vervangende oefening" : "Naam extra oefening";
       naam.value = oefening.naam;
       naam.addEventListener("input", () => {
         oefening.naam = naam.value;
         bewaarConcept(true);
       });
       kop.appendChild(naam);
-
-      const verwijder = maakKnop("×", "icoonknop", "Extra oefening verwijderen");
-      verwijder.addEventListener("click", () => {
-        plan.oefeningen.splice(oefeningIndex, 1);
-        bewaarEnRender();
-      });
-      kop.appendChild(verwijder);
     } else {
       const titel = document.createElement("h2");
       titel.textContent = oefening.naam;
       kop.appendChild(titel);
     }
+    const menuKnop = maakKnop("⋯", "icoonknop", "Oefeningmenu: verplaatsen of vervangen");
+    menuKnop.addEventListener("click", () => {
+      oefening.menuOpen = !oefening.menuOpen;
+      bewaarEnRender();
+    });
+    kop.appendChild(menuKnop);
     kaart.appendChild(kop);
+
+    if (oefening.vervangen_van) {
+      const vervangenTekst = document.createElement("p");
+      vervangenTekst.className = "notitie";
+      vervangenTekst.textContent = `Vervangt: ${oefening.vervangen_van}`;
+      kaart.appendChild(vervangenTekst);
+    }
+
+    if (oefening.menuOpen) kaart.appendChild(maakOefeningMenu(oefening, oefeningIndex));
 
     if (oefening.notitie) {
       const notitie = document.createElement("p");
@@ -255,11 +270,90 @@ function renderOefeningen() {
       kaart.appendChild(maakSetRegel(oefening, set, oefeningIndex, setIndex));
     });
 
+    if (oefening.sets.some((set) => set.status === "gedaan")) {
+      kaart.appendChild(maakRpeRij(oefening));
+    }
+
     const extraSet = maakKnop("+ Extra set", "secundair breed set-toevoegen");
     extraSet.addEventListener("click", () => voegSetToe(oefening));
     kaart.appendChild(extraSet);
     elementen.oefeningen.appendChild(kaart);
   });
+}
+
+function maakOefeningMenu(oefening, oefeningIndex) {
+  const rij = document.createElement("div");
+  rij.className = "oefening-menu";
+
+  const omhoog = maakKnop("↑ Omhoog", "secundair compact");
+  omhoog.disabled = oefeningIndex === 0;
+  omhoog.addEventListener("click", () => verplaatsOefening(oefeningIndex, -1));
+
+  const omlaag = maakKnop("↓ Omlaag", "secundair compact");
+  omlaag.disabled = oefeningIndex === plan.oefeningen.length - 1;
+  omlaag.addEventListener("click", () => verplaatsOefening(oefeningIndex, 1));
+
+  rij.append(omhoog, omlaag);
+
+  if (oefening.extra) {
+    const verwijder = maakKnop("× Weg", "secundair compact gevaar", "Extra oefening verwijderen");
+    verwijder.addEventListener("click", () => {
+      plan.oefeningen.splice(oefeningIndex, 1);
+      bewaarEnRender();
+    });
+    rij.appendChild(verwijder);
+  } else if (oefening.vervangen_van) {
+    const herstel = maakKnop("↺ Origineel", "secundair compact", "Vervanging ongedaan maken");
+    herstel.addEventListener("click", () => {
+      oefening.naam = oefening.vervangen_van;
+      delete oefening.vervangen_van;
+      oefening.menuOpen = false;
+      bewaarEnRender();
+    });
+    rij.appendChild(herstel);
+  } else {
+    const vervang = maakKnop("⇄ Vervangen", "secundair compact", "Oefening vervangen (machine bezet)");
+    vervang.addEventListener("click", () => {
+      oefening.vervangen_van = oefening.naam;
+      oefening.menuOpen = false;
+      bewaarEnRender();
+      const invoer = elementen.oefeningen.querySelectorAll(".oefening")[oefeningIndex]?.querySelector(".oefening-naam");
+      if (invoer) { invoer.focus(); invoer.select(); }
+    });
+    rij.appendChild(vervang);
+  }
+  return rij;
+}
+
+function verplaatsOefening(index, richting) {
+  const doel = index + richting;
+  if (doel < 0 || doel >= plan.oefeningen.length) return;
+  const [oefening] = plan.oefeningen.splice(index, 1);
+  plan.oefeningen.splice(doel, 0, oefening);
+  bewaarEnRender();
+}
+
+function maakRpeRij(oefening) {
+  const rij = document.createElement("div");
+  rij.className = "rpe-rij";
+
+  const label = document.createElement("span");
+  label.className = "eenheid";
+  label.textContent = "RPE";
+  rij.appendChild(label);
+
+  const knoppen = document.createElement("div");
+  knoppen.className = "rpe-knoppen";
+  for (let waarde = 6; waarde <= 10; waarde += 0.5) {
+    const knop = maakKnop(String(waarde).replace(".", ","), "rpe-knop" + (oefening.rpe === waarde ? " actief" : ""), `RPE ${waarde}`);
+    knop.addEventListener("click", () => {
+      oefening.rpe = oefening.rpe === waarde ? null : waarde;
+      bewaarEnRender();
+    });
+    knoppen.appendChild(knop);
+  }
+  rij.appendChild(knoppen);
+  return rij;
 }
 
 function maakSetRegel(oefening, set, oefeningIndex, setIndex) {
@@ -280,10 +374,10 @@ function maakSetRegel(oefening, set, oefeningIndex, setIndex) {
 
   const waarden = document.createElement("div");
   waarden.className = "waarden";
-  waarden.append(
-    maakInvoer(set, "kg", "kg"),
-    maakInvoer(set, "reps", "reps"),
-  );
+  const keer = document.createElement("span");
+  keer.className = "eenheid";
+  keer.textContent = "×";
+  waarden.append(maakKgStepper(oefening, set), keer, maakInvoer(set, "reps", "reps"));
 
   const actie = set.extra
     ? maakKnop("×", "verwijder", "Extra set verwijderen")
@@ -305,6 +399,29 @@ function maakSetRegel(oefening, set, oefeningIndex, setIndex) {
   return regel;
 }
 
+function maakKgStepper(oefening, set) {
+  const groep = document.createElement("div");
+  groep.className = "kg-stepper";
+  const stap = Number.isFinite(oefening.stap_kg) && oefening.stap_kg > 0 ? oefening.stap_kg : 2.5;
+
+  const pasAan = (richting) => {
+    const basis = Number.isFinite(set.kg) ? set.kg : (set.gepland_kg ?? 0);
+    set.kg = Math.max(0, Math.round((basis + richting * stap) * 100) / 100);
+    bewaarEnRender();
+  };
+
+  const minKnop = maakKnop("−", "stap", `${stap} kg minder`);
+  minKnop.addEventListener("click", () => pasAan(-1));
+  const plusKnop = maakKnop("+", "stap", `${stap} kg meer`);
+  plusKnop.addEventListener("click", () => pasAan(1));
+  const uitgeschakeld = set.status === "overgeslagen";
+  minKnop.disabled = uitgeschakeld;
+  plusKnop.disabled = uitgeschakeld;
+
+  groep.append(minKnop, maakInvoer(set, "kg", "kg"), plusKnop);
+  return groep;
+}
+
 function maakInvoer(set, veld, eenheid) {
   const input = document.createElement("input");
   input.type = "number";
@@ -318,13 +435,7 @@ function maakInvoer(set, veld, eenheid) {
     set[veld] = getalUitInvoer(input);
     bewaarConcept(true);
   });
-
-  const label = document.createElement("span");
-  label.className = "eenheid";
-  label.textContent = eenheid;
-  const fragment = document.createDocumentFragment();
-  fragment.append(input, label);
-  return fragment;
+  return input;
 }
 
 function maakKnop(tekst, className, ariaLabel = "") {
@@ -355,6 +466,7 @@ function voegOefeningToe() {
   plan.oefeningen.push({
     naam: "",
     rust_sec: 90,
+    stap_kg: 2.5,
     notitie: "",
     extra: true,
     sets: [{ kg: null, reps: null, status: "open", extra: true }],
@@ -399,8 +511,17 @@ function werkTimerBij() {
     window.clearInterval(timerInterval);
     timerInterval = null;
     elementen.timer.querySelector(".timer-label").textContent = "Rust voorbij";
+    piep();
     if (navigator.vibrate) navigator.vibrate([250, 120, 250]);
   }
+}
+
+function verlengTimer(seconden) {
+  if (!timerEinde) return;
+  timerEinde = Math.max(Date.now(), timerEinde) + seconden * 1000;
+  elementen.timer.querySelector(".timer-label").textContent = "Rust";
+  if (!timerInterval) timerInterval = window.setInterval(werkTimerBij, 250);
+  werkTimerBij();
 }
 
 function stopTimer() {
@@ -408,6 +529,45 @@ function stopTimer() {
   timerInterval = null;
   timerEinde = null;
   elementen.timer.classList.add("verborgen");
+}
+
+// iOS ondersteunt navigator.vibrate niet; een korte dubbele piep is daar het signaal.
+let audioContext = null;
+function initAudio() {
+  const Context = window.AudioContext || window.webkitAudioContext;
+  if (!audioContext && Context) audioContext = new Context();
+  if (audioContext?.state === "suspended") audioContext.resume();
+}
+
+function piep() {
+  if (!audioContext || audioContext.state !== "running") return;
+  try {
+    const nu = audioContext.currentTime;
+    [0, 0.35].forEach((offset) => {
+      const toon = audioContext.createOscillator();
+      const volume = audioContext.createGain();
+      toon.frequency.value = 880;
+      volume.gain.setValueAtTime(0.0001, nu + offset);
+      volume.gain.exponentialRampToValueAtTime(0.4, nu + offset + 0.02);
+      volume.gain.exponentialRampToValueAtTime(0.0001, nu + offset + 0.28);
+      toon.connect(volume).connect(audioContext.destination);
+      toon.start(nu + offset);
+      toon.stop(nu + offset + 0.3);
+    });
+  } catch {
+    // Geluid is best effort; de timer toont "Rust voorbij" hoe dan ook.
+  }
+}
+
+// Scherm aan houden tijdens de sessie, zodat de rusttimer blijft lopen.
+let wakeLock = null;
+async function vraagWakeLock() {
+  if (!("wakeLock" in navigator)) return;
+  try {
+    wakeLock = await navigator.wakeLock.request("screen");
+  } catch {
+    wakeLock = null;
+  }
 }
 
 async function rondSessieAf() {
@@ -465,7 +625,7 @@ async function startNieuweSessie() {
 
 function valideerSessie() {
   for (const oefening of plan.oefeningen) {
-    if (!oefening.naam.trim()) return "Vul de naam van elke extra oefening in.";
+    if (!oefening.naam.trim()) return "Vul de naam in van elke extra of vervangende oefening.";
     for (const set of oefening.sets) {
       if (set.status === "gedaan") {
         if (!Number.isFinite(set.kg) || set.kg < 0) return `Vul geldige kg in bij ${oefening.naam}.`;
@@ -488,10 +648,16 @@ function bouwSessieJson() {
     plan_van: plan.gepland_op,
     naam: plan.naam,
     notitie: elementen.sessieNotitie.value.trim(),
-    oefeningen: plan.oefeningen.map((oefening) => ({
-      naam: oefening.naam.trim(),
-      sets: oefening.sets.map(maakContractSet),
-    })),
+    oefeningen: plan.oefeningen.map((oefening) => {
+      const resultaat = {
+        naam: oefening.naam.trim(),
+        sets: oefening.sets.map(maakContractSet),
+      };
+      if (oefening.vervangen_van) resultaat.vervangen_van = oefening.vervangen_van;
+      const laatsteGedaan = [...resultaat.sets].reverse().find((set) => set.gedaan);
+      if (Number.isFinite(oefening.rpe) && laatsteGedaan) laatsteGedaan.rpe = oefening.rpe;
+      return resultaat;
+    }),
   };
 }
 

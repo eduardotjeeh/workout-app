@@ -33,6 +33,7 @@ De hub pusht en pullt via git; de app via de Contents API (`GET/PUT /repos/{owne
     {
       "naam": "Back squat",
       "rust_sec": 150,
+      "stap_kg": 2.5,
       "notitie": "Diepte boven alles",
       "sets": [
         { "kg": 60, "reps": 5 },
@@ -43,6 +44,8 @@ De hub pusht en pullt via git; de app via de Contents API (`GET/PUT /repos/{owne
   ]
 }
 ```
+
+`stap_kg` (optioneel, standaard 2,5) is de kleinste gewichtsstap van de machine/oefening; de plus/min-knoppen in de app stappen hiermee.
 
 ### `sessies/JJJJ-MM-DD.json` — geschreven door de app
 
@@ -63,7 +66,7 @@ Zelfde structuur als het plan, aangevuld met wat er werkelijk gebeurde:
       "sets": [
         { "gepland_kg": 60, "gepland_reps": 5, "kg": 60, "reps": 5, "gedaan": true },
         { "gepland_kg": 60, "gepland_reps": 5, "kg": 60, "reps": 5, "gedaan": true },
-        { "gepland_kg": 60, "gepland_reps": 5, "kg": 55, "reps": 4, "gedaan": true }
+        { "gepland_kg": 60, "gepland_reps": 5, "kg": 55, "reps": 4, "gedaan": true, "rpe": 8 }
       ]
     }
   ]
@@ -73,6 +76,8 @@ Zelfde structuur als het plan, aangevuld met wat er werkelijk gebeurde:
 Regels:
 - `kg`/`reps` zijn de werkelijke waarden; `gepland_*` blijft staan zodat de hub afwijkingen ziet.
 - Overgeslagen set: `"gedaan": false`, zonder `kg`/`reps`. Extra set of oefening: gewoon toevoegen, zonder `gepland_*`.
+- `rpe` (optioneel, 6–10 in stappen van 0,5) staat op de laatste gedane werkset van een oefening.
+- Vervangt Eduard een oefening in de sportschool (machine bezet), dan krijgt de oefening `"vervangen_van": "<oorspronkelijke naam>"`; de `gepland_*`-waarden van het origineel blijven staan als referentie.
 - Bestandsnaam = trainingsdatum (lokale tijd). Tweede sessie op één dag: `-2` suffix.
 - Kg met decimale punt, JSON in UTF-8.
 

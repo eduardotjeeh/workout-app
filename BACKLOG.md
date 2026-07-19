@@ -25,9 +25,20 @@ In `../Gezondheid`: `prompts/app-plan.md` (plan klaarzetten + weekplanning + ver
 
 Gecontroleerd: de laatste export (`2026-07-15-strong_workouts.csv`, 51 sessies van 2025-11-11 t/m 2026-06-16) is volledig gereconcilieerd met de daglogs in de Gezondheid-hub; er is daarna niet meer getraind. Overstapdatum 2026-07-21 vastgelegd in `schema.md`; `prompts/strong-import.md` is als historisch gemarkeerd. Strong mag met pensioen.
 
+## W7 — Sportschool-iteratie v0.2.0 ✅ (2026-07-19, Fable)
+
+Op verzoek van Eduard plus eigen review-punten:
+- Plus/min-stappers op het gewicht; stapgrootte per oefening via `stap_kg` in het plancontract (standaard 2,5).
+- RPE-knoppen (6–10, halve stappen) per oefening zodra een set is afgevinkt; komt als `rpe` op de laatste gedane werkset in het sessie-JSON.
+- Oefeningmenu (⋯): omhoog/omlaag verplaatsen, vervangen bij bezette machine (`vervangen_van` in het contract, met ↺-herstelknop), extra oefening verwijderen.
+- Rusttimer: "+30 s"-knop en dubbele piep bij afloop (iOS ondersteunt `navigator.vibrate` niet — piep is daar hét signaal).
+- Wake lock houdt het scherm aan tijdens de sessie.
+- Hub-prompts (`app-plan.md`, `app-import.md`) en ARCHITECTUUR-contract bijgewerkt voor `stap_kg`, `rpe` en `vervangen_van`.
+
 ## W6 — Later / ideeën
 
 - Plate calculator (welke schijven op de stang).
 - Meerdere geplande sessies vooruit (`plan/` als lijstje) voor een heel weekblok.
 - Supersets in het contract.
-- Donkere modus / thema.
+- Lichte modus / thema.
+- Per-machine `stap_kg` verfijnen zodra Eduard de echte stapgroottes meldt.
