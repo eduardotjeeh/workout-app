@@ -10,11 +10,12 @@ Afvinken, overslaan, kg/reps aanpassen, extra sets/oefeningen, rusttimer (absolu
 
 Instellingenscherm met verbindingstest, plan ophalen + localStorage-cache voor offline, sessies PUT'en met persistente wachtrij en idempotente retry (herkent al geüploade sessie aan `gestart`), conflictveilige `-2`/`-3`-suffixen, zichtbare sync-status. Getest: foutpad met echte 401 van de GitHub API; happy path met mocks (Codex) — live upload volgt in W3 met Eduards PAT.
 
-## W3 — PWA & hosting
+## W3 — PWA & hosting ✅ (2026-07-19, Codex; review Fable — behalve iPhone-test)
 
-- `manifest.webmanifest` afmaken (icoon, naam, standalone), service worker die appbestanden cachet, versienummer zichtbaar in de app.
-- ✅ GitHub-repo's `workout-app` (public) en `workout-data` (privé) bestaan sinds 2026-07-19.
-- Pages activeren op `app/`; eerste plan handmatig in `workout-data` zetten; PAT-instructie voor Eduard; end-to-end test op de iPhone.
+- ✅ Service worker (netwerk-eerst, offline-fallback, cache-opruiming, API-verkeer uitgesloten), iconen + manifest, `APP_VERSIE` in `app/versie.js` stuurt cache én zichtbaar versienummer.
+- ✅ Pages-workflow publiceert `app/` bij push naar `main`; Pages geactiveerd (bron: GitHub Actions).
+- ✅ Placeholder-plan in `workout-data`; wordt in W4 vervangen door het echte plan uit de hub.
+- ⏳ End-to-end test op Eduards iPhone (installeren, PAT invoeren, sessie loggen, upload controleren).
 
 ## W4 — Integratie Gezondheid-hub
 

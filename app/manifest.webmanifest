@@ -1,10 +1,24 @@
 {
   "name": "Workout",
   "short_name": "Workout",
-  "start_url": ".",
+  "start_url": "./",
+  "scope": "./",
   "display": "standalone",
   "background_color": "#111418",
   "theme_color": "#111418",
   "description": "Eigen workout-logger; plan uit de Gezondheid-hub, resultaten terug via workout-data.",
-  "icons": []
+  "icons": [
+    {
+      "src": "./icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "./icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
 }

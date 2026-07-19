@@ -230,6 +230,13 @@ button:disabled { opacity: 0.55; }
 .melding.fout { color: #ff7b72; }
 .melding.goed { color: var(--accent); }
 
+.app-versie {
+  margin-top: 1.5rem;
+  color: var(--gedempt);
+  text-align: center;
+  font-size: 0.8rem;
+}
+
 #resultaat .breed + .breed { margin-top: 0.6rem; }
 
 #resultaat pre {

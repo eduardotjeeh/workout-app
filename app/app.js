@@ -40,9 +40,12 @@ const elementen = {
   githubOwner: document.getElementById("github-owner"),
   githubToken: document.getElementById("github-token"),
   instellingenMelding: document.getElementById("instellingen-melding"),
+  appVersie: document.getElementById("app-versie"),
 };
 
 async function init() {
+  elementen.appVersie.textContent = `versie ${APP_VERSIE}`;
+  registreerServiceWorker();
   stelGebeurtenissenIn();
   vulInstellingenformulier();
   werkSyncStatusBij();
@@ -51,6 +54,18 @@ async function init() {
   window.setInterval(() => {
     if (navigator.onLine && leesWachtrij().length > 0) synchroniseerWachtrij();
   }, 60_000);
+}
+
+async function registreerServiceWorker() {
+  if (!("serviceWorker" in navigator)) return;
+  try {
+    await navigator.serviceWorker.register("./sw.js", {
+      scope: "./",
+      updateViaCache: "none",
+    });
+  } catch (fout) {
+    console.warn("Service worker registreren mislukt:", veiligeFoutmelding(fout));
+  }
 }
 
 function stelGebeurtenissenIn() {
@@ -110,7 +125,7 @@ async function laadStartplan() {
     elementen.sessieNotitie.value = concept.sessieNotitie ?? "";
   } else {
     if (!bronplan) {
-      const antwoord = await fetch("voorbeeld-plan.json");
+      const antwoord = await fetch("./voorbeeld-plan.json");
       if (!antwoord.ok) throw new Error("Voorbeeldplan kon niet worden geladen.");
       bronplan = await antwoord.json();
       bron = "voorbeeld";
