@@ -10,15 +10,64 @@
 </head>
 <body>
   <header>
-    <h1 id="plan-naam">Laden…</h1>
-    <p id="plan-notitie" class="notitie"></p>
+    <div class="bovenbalk">
+      <div>
+        <h1 id="plan-naam">Laden…</h1>
+        <p id="plan-notitie" class="notitie"></p>
+      </div>
+      <button id="instellingen-open" type="button" class="icoonknop" aria-label="Instellingen">⚙</button>
+    </div>
+    <button id="sync-status" type="button" class="sync-status" aria-live="polite">Sync controleren…</button>
   </header>
 
-  <main id="oefeningen"></main>
+  <main>
+    <section id="logscherm">
+      <div id="oefeningen"></div>
+      <button id="oefening-toevoegen" type="button" class="secundair breed">+ Extra oefening</button>
 
-  <footer>
-    <div id="timer" class="timer verborgen">
-      <span id="timer-tijd">0:00</span>
+      <label class="veldblok" for="sessie-notitie">
+        <span>Sessienotitie</span>
+        <textarea id="sessie-notitie" rows="3" placeholder="Hoe ging de training?"></textarea>
+      </label>
+      <p id="log-melding" class="melding verborgen" role="alert"></p>
+    </section>
+
+    <section id="resultaat" class="verborgen" aria-live="polite">
+      <h2>Sessie opgeslagen</h2>
+      <p id="resultaat-status" class="notitie"></p>
+      <pre id="sessie-json"></pre>
+      <button id="resultaat-sync" type="button" class="secundair breed">Nu synchroniseren</button>
+      <button id="nieuwe-sessie" type="button" class="primair breed">Nieuwe sessie starten</button>
+    </section>
+
+    <section id="instellingen" class="verborgen">
+      <div class="sectiekop">
+        <h2>Instellingen</h2>
+        <button id="instellingen-sluit" type="button" class="icoonknop" aria-label="Instellingen sluiten">×</button>
+      </div>
+      <p class="notitie">Gebruik een fine-grained PAT met alleen Contents lees- en schrijfrechten voor de privérepo <strong>workout-data</strong>.</p>
+      <label class="veldblok" for="github-owner">
+        <span>GitHub-owner</span>
+        <input id="github-owner" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="gebruikersnaam">
+      </label>
+      <label class="veldblok" for="github-token">
+        <span>Fine-grained PAT</span>
+        <input id="github-token" type="password" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="github_pat_…">
+      </label>
+      <div class="knoppenrij">
+        <button id="instellingen-opslaan" type="button" class="secundair">Opslaan</button>
+        <button id="verbinding-testen" type="button" class="primair compact">Verbinding testen</button>
+      </div>
+      <p id="instellingen-melding" class="melding" aria-live="polite"></p>
+    </section>
+  </main>
+
+  <footer id="log-acties">
+    <div id="timer" class="timer verborgen" aria-live="polite">
+      <div>
+        <span class="timer-label">Rust</span>
+        <strong id="timer-tijd">0:00</strong>
+      </div>
       <button id="timer-stop" type="button">Stop rust</button>
     </div>
     <button id="afronden" type="button" class="primair">Sessie afronden</button>
