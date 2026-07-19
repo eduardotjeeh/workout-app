@@ -16,7 +16,10 @@
         <h1 id="plan-naam">Laden…</h1>
         <p id="plan-notitie" class="notitie"></p>
       </div>
-      <button id="instellingen-open" type="button" class="icoonknop" aria-label="Instellingen">⚙</button>
+      <div class="knopgroep">
+        <button id="dashboard-open" type="button" class="icoonknop" aria-label="Dashboard">📊</button>
+        <button id="instellingen-open" type="button" class="icoonknop" aria-label="Instellingen">⚙</button>
+      </div>
     </div>
     <button id="sync-status" type="button" class="sync-status" aria-live="polite">Sync controleren…</button>
   </header>
@@ -61,6 +64,15 @@
       </div>
       <p id="instellingen-melding" class="melding" aria-live="polite"></p>
       <p class="app-versie">Workout <span id="app-versie"></span></p>
+    </section>
+
+    <section id="dashboard" class="verborgen">
+      <div class="sectiekop">
+        <h2>Dashboard</h2>
+        <button id="dashboard-sluit" type="button" class="icoonknop" aria-label="Dashboard sluiten">×</button>
+      </div>
+      <p id="dashboard-status" class="notitie" aria-live="polite"></p>
+      <iframe id="dashboard-frame" title="Gezondheid-dashboard" sandbox="allow-scripts"></iframe>
     </section>
   </main>
 

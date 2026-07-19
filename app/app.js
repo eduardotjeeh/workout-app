@@ -6,6 +6,7 @@ const OPSLAG = {
   planCache: "workout-plan-cache-v1",
   concept: "workout-actieve-sessie-v1",
   wachtrij: "workout-sync-wachtrij-v1",
+  dashboard: "workout-dashboard-v1",
 };
 
 const REPO = "workout-data";
@@ -41,6 +42,9 @@ const elementen = {
   githubToken: document.getElementById("github-token"),
   instellingenMelding: document.getElementById("instellingen-melding"),
   appVersie: document.getElementById("app-versie"),
+  dashboard: document.getElementById("dashboard"),
+  dashboardStatus: document.getElementById("dashboard-status"),
+  dashboardFrame: document.getElementById("dashboard-frame"),
 };
 
 async function init() {
@@ -80,6 +84,11 @@ function stelGebeurtenissenIn() {
   document.getElementById("afronden").addEventListener("click", rondSessieAf);
   document.getElementById("instellingen-open").addEventListener("click", openInstellingen);
   document.getElementById("instellingen-sluit").addEventListener("click", sluitInstellingen);
+  document.getElementById("dashboard-open").addEventListener("click", openDashboard);
+  document.getElementById("dashboard-sluit").addEventListener("click", () => {
+    elementen.dashboard.classList.add("verborgen");
+    toonHoofdscherm();
+  });
   document.getElementById("instellingen-opslaan").addEventListener("click", slaInstellingenOp);
   document.getElementById("verbinding-testen").addEventListener("click", testVerbinding);
   document.getElementById("resultaat-sync").addEventListener("click", synchroniseerWachtrij);
@@ -840,21 +849,63 @@ function vulInstellingenformulier() {
   elementen.githubToken.value = instellingen?.token ?? "";
 }
 
+function verbergAlleSchermen() {
+  for (const scherm of [elementen.logscherm, elementen.resultaat, elementen.instellingen,
+                        elementen.dashboard, elementen.logActies]) {
+    scherm.classList.add("verborgen");
+  }
+}
+
+function toonHoofdscherm() {
+  if (elementen.sessieJson.textContent) {
+    elementen.resultaat.classList.remove("verborgen");
+  } else {
+    elementen.logscherm.classList.remove("verborgen");
+    elementen.logActies.classList.remove("verborgen");
+  }
+}
+
 function openInstellingen() {
-  elementen.logscherm.classList.add("verborgen");
-  elementen.resultaat.classList.add("verborgen");
-  elementen.logActies.classList.add("verborgen");
+  verbergAlleSchermen();
   elementen.instellingen.classList.remove("verborgen");
   elementen.githubOwner.focus();
 }
 
 function sluitInstellingen() {
   elementen.instellingen.classList.add("verborgen");
-  if (elementen.sessieJson.textContent) {
-    elementen.resultaat.classList.remove("verborgen");
-  } else {
-    elementen.logscherm.classList.remove("verborgen");
-    elementen.logActies.classList.remove("verborgen");
+  toonHoofdscherm();
+}
+
+async function openDashboard() {
+  verbergAlleSchermen();
+  elementen.dashboard.classList.remove("verborgen");
+
+  const cache = leesJson(OPSLAG.dashboard);
+  if (cache?.html) {
+    elementen.dashboardFrame.srcdoc = cache.html;
+    elementen.dashboardStatus.textContent = `Versie van ${cache.opgehaald}`;
+  }
+
+  const instellingen = leesInstellingen();
+  if (!instellingen) {
+    if (!cache) elementen.dashboardStatus.textContent = "Stel eerst GitHub in (⚙) om het dashboard op te halen.";
+    return;
+  }
+  elementen.dashboardStatus.textContent = cache ? `Versie van ${cache.opgehaald} · bijwerken…` : "Dashboard ophalen…";
+  try {
+    const antwoord = await githubFetch(instellingen, "dashboard.html");
+    if (!antwoord.ok) throw await githubFout(antwoord, "Dashboard ophalen mislukt");
+    const inhoud = await leesContentsTekst(antwoord);
+    const opgehaald = formatLokaleDatumtijd().slice(0, 16).replace("T", " ");
+    schrijfJson(OPSLAG.dashboard, { html: inhoud, opgehaald });
+    elementen.dashboardFrame.srcdoc = inhoud;
+    elementen.dashboardStatus.textContent = `Bijgewerkt ${opgehaald}`;
+  } catch (fout) {
+    if (cache?.html) {
+      elementen.dashboardStatus.textContent = `Offline · versie van ${cache.opgehaald}`;
+    } else {
+      elementen.dashboardStatus.textContent = veiligeFoutmelding(fout);
+    }
   }
 }
 
@@ -882,12 +933,16 @@ async function githubFetch(instellingen, pad, opties = {}) {
   });
 }
 
-async function leesContentsAntwoord(antwoord) {
+async function leesContentsTekst(antwoord) {
   const gegevens = await antwoord.json();
   if (typeof gegevens.content !== "string" || gegevens.encoding !== "base64") {
     throw new Error("GitHub gaf geen leesbare bestandsinhoud terug.");
   }
-  return JSON.parse(base64NaarTekst(gegevens.content));
+  return base64NaarTekst(gegevens.content);
+}
+
+async function leesContentsAntwoord(antwoord) {
+  return JSON.parse(await leesContentsTekst(antwoord));
 }
 
 async function githubFout(antwoord, voorvoegsel) {

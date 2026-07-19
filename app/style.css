@@ -294,6 +294,17 @@ button.rpe-knop.actief {
 .melding.fout { color: #ff7b72; }
 .melding.goed { color: var(--accent); }
 
+.knopgroep { display: flex; gap: 0.5rem; flex-shrink: 0; }
+
+#dashboard-frame {
+  width: 100%;
+  height: calc(100vh - 11rem);
+  margin-top: 0.6rem;
+  border: 1px solid var(--rand);
+  border-radius: 10px;
+  background: var(--achtergrond);
+}
+
 .app-versie {
   margin-top: 1.5rem;
   color: var(--gedempt);

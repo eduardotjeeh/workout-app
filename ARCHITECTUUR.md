@@ -19,6 +19,8 @@ Gezondheid-hub (Claude)                workout-data (privé)              iPhone
 
 De hub pusht en pullt via git; de app via de Contents API (`GET/PUT /repos/{owner}/workout-data/contents/...`).
 
+Naast plan en sessies publiceert de hub ook `dashboard.html` (zelfstandig HTML-bestand, gegenereerd door `Gezondheid/scripts/dashboard.py`) in de root van `workout-data`; de app toont dat via de 📊-knop in een sandboxed iframe, met localStorage-cache voor offline.
+
 ## Datacontract
 
 ### `plan/next.json` — geschreven door de hub

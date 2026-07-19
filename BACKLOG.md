@@ -35,6 +35,10 @@ Op verzoek van Eduard plus eigen review-punten:
 - Wake lock houdt het scherm aan tijdens de sessie.
 - Hub-prompts (`app-plan.md`, `app-import.md`) en ARCHITECTUUR-contract bijgewerkt voor `stap_kg`, `rpe` en `vervangen_van`.
 
+## W8 — Dashboard in de app ✅ (2026-07-19, Fable, v0.3.0)
+
+📊-knop naast de instellingen: haalt `dashboard.html` uit `workout-data` op via de Contents API (zelfde PAT), toont hem in een sandboxed iframe en cachet hem in localStorage voor offline. De hub publiceert het dashboard via `scripts/dashboard.py` + push van Workout-Data (onderdeel van de wekelijkse checkup).
+
 ## W6 — Later / ideeën
 
 - Plate calculator (welke schijven op de stang).
