@@ -17,9 +17,9 @@ Instellingenscherm met verbindingstest, plan ophalen + localStorage-cache voor o
 - ✅ Placeholder-plan in `workout-data`; wordt in W4 vervangen door het echte plan uit de hub.
 - ✅ End-to-end test op Eduards iPhone geslaagd (2026-07-19): app geïnstalleerd via beginscherm, PAT ingevoerd, testsessie gelogd met afwijkingen/extra sets/extra oefening en correct geüpload naar `workout-data`. Testsessie daarna verwijderd.
 
-## W4 — Integratie Gezondheid-hub
+## W4 — Integratie Gezondheid-hub ✅ (2026-07-19, Fable)
 
-In `../Gezondheid`: `prompts/workout-coach.md` leert `plan/next.json` schrijven en pushen; nieuwe prompt of uitbreiding van sessie-import leert `sessies/*.json` ophalen en als daglog verwerken (zelfde reconciliatie als Strong-import). Strong-import blijft bestaan voor de historie.
+In `../Gezondheid`: `prompts/app-plan.md` (plan klaarzetten + weekplanning + verzetten/cancelen) en `prompts/app-import.md` (sessies → daglogs met reconciliatie); schema-adviescyclus en workout-coach omgezet naar de app-flow; beide prompts bevatten een Codex-aanwijzing (sessie starten in de bovenliggende `Projects`-map wegens sandboxrechten). Eerste echte plan (Full Body A herstart, 2026-07-21) staat in `workout-data`. Strong-import blijft bestaan voor de historie.
 
 ## W5 — Strong-historie afsluiten
 
