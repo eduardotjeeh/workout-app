@@ -49,6 +49,12 @@ Naast plan en sessies publiceert de hub ook `dashboard.html` (zelfstandig HTML-b
 
 `stap_kg` (optioneel, standaard 2,5) is de kleinste gewichtsstap van de machine/oefening; de plus/min-knoppen in de app stappen hiermee. Afspraken: schijfoefeningen 2,5; machines/kabels 1,25. Speciale waarde: de tekst `"dumbbell"` — de app stapt dan 1 kg t/m 10 kg en daarboven 2 kg (het dumbbellrek).
 
+Warming-up (optioneel, berekend volgens `Gezondheid/data/training/schema.md` §Warming-up):
+- plan-niveau `"warming_up": [{ "tekst": "3–4 min hometrainer, rustig tempo" }]` — algemene checklist, afvinkbaar in de app;
+- per oefening `"opwarm_sets": [{ "kg": 15, "reps": 6 }]` — getoond boven de werksets, afvinkbaar, zonder rusttimer.
+
+In het sessie-JSON komen beide terug met een `gedaan`-vlag: `warming_up: [{tekst, gedaan}]` en `opwarm_sets: [{kg, reps, gedaan}]`. Opwarmsets tellen nooit mee als werksets.
+
 ### `sessies/JJJJ-MM-DD.json` — geschreven door de app
 
 Zelfde structuur als het plan, aangevuld met wat er werkelijk gebeurde:

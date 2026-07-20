@@ -43,6 +43,10 @@ Op verzoek van Eduard plus eigen review-punten:
 
 Bug uit de praktijk: na correctie van `stap_kg` in het plan bleef de app 2,5 kg stappen. Oorzaak: een actieve sessie (`concept`) wordt uit het plan van dát moment opgebouwd en krijgt voorrang boven een nieuw opgehaald plan — terecht om logs niet te verliezen, maar er was geen weg terug. Nu bewaart het concept een `bronJson`-vingerafdruk van het bronplan; wijkt het opgehaalde plan daarvan af, dan verschijnt een banner "Er staat een bijgewerkt plan klaar" met Laden (met bevestiging bij voortgang) en ×. Concepten van vóór v0.4.0 hebben geen `bronJson` en tonen de banner dus altijd één keer.
 
+## W10 — Warming-up in plan en app ✅ (2026-07-20, Fable, v0.5.0)
+
+Evidence-based warming-upframework vastgelegd in `Gezondheid/data/training/schema.md` §Warming-up (kort algemeen + ramp-sets alleen bij de eerste oefening per patroon, geen statisch rekken). Contract: plan-niveau `warming_up`-checklist en per oefening `opwarm_sets`; beide afvinkbaar in de app (aparte compacte stijl, geen rusttimer, tellen nooit mee als werksets) en komen met `gedaan`-vlag terug in het sessie-JSON. Plan- en importprompts bijgewerkt.
+
 ## W6 — Later / ideeën
 
 - Plate calculator (welke schijven op de stang).

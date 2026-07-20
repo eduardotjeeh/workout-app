@@ -142,6 +142,12 @@ main { padding: 0.75rem 1rem 8rem; }
   color: white;
 }
 
+.set.opwarm { min-height: 3.2rem; }
+.set.opwarm button.vink { min-width: 2.4rem; min-height: 2.4rem; }
+.opwarm-tekst { color: var(--gedempt); font-size: 0.95rem; }
+.set.opwarm.gedaan .opwarm-tekst { color: var(--tekst); }
+.warmup-kaart .set:first-of-type { border-top: 0; margin-top: 0.4rem; }
+
 .set.overgeslagen { opacity: 0.68; }
 .set.overgeslagen .waarden { text-decoration: line-through; }
 .set.overgeslagen button.overslaan { border-color: var(--waarschuwing); color: #e3b341; }

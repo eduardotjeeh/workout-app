@@ -219,6 +219,11 @@ function maakWerkplan(ruwPlan) {
     gepland_op: ruwPlan.gepland_op,
     naam: ruwPlan.naam,
     notitie: ruwPlan.notitie ?? "",
+    warming_up: Array.isArray(ruwPlan.warming_up)
+      ? ruwPlan.warming_up
+          .filter((item) => typeof item?.tekst === "string" && item.tekst.trim())
+          .map((item) => ({ tekst: item.tekst, gedaan: false }))
+      : [],
     oefeningen: ruwPlan.oefeningen.map((oefening) => ({
       naam: oefening.naam,
       rust_sec: Number.isFinite(oefening.rust_sec) ? oefening.rust_sec : 0,
@@ -226,6 +231,11 @@ function maakWerkplan(ruwPlan) {
         : (Number.isFinite(oefening.stap_kg) && oefening.stap_kg > 0 ? oefening.stap_kg : 2.5),
       notitie: oefening.notitie ?? "",
       extra: false,
+      opwarm_sets: Array.isArray(oefening.opwarm_sets)
+        ? oefening.opwarm_sets
+            .filter((set) => Number.isFinite(set?.kg) && Number.isFinite(set?.reps))
+            .map((set) => ({ kg: set.kg, reps: set.reps, gedaan: false }))
+        : [],
       sets: oefening.sets.map((set) => ({
         gepland_kg: set.kg,
         gepland_reps: set.reps,
@@ -251,6 +261,30 @@ function toonPlan() {
 
 function renderOefeningen() {
   elementen.oefeningen.replaceChildren();
+
+  if (plan.warming_up?.length) {
+    const kaart = document.createElement("section");
+    kaart.className = "oefening warmup-kaart";
+    const titel = document.createElement("h2");
+    titel.textContent = "Warming-up";
+    kaart.appendChild(titel);
+    plan.warming_up.forEach((item) => {
+      const regel = document.createElement("div");
+      regel.className = "set opwarm" + (item.gedaan ? " gedaan" : "");
+      const vink = maakKnop("✓", "vink", item.gedaan ? "Weer openzetten" : "Afvinken");
+      vink.addEventListener("click", () => {
+        item.gedaan = !item.gedaan;
+        bewaarEnRender();
+      });
+      const tekst = document.createElement("span");
+      tekst.className = "opwarm-tekst";
+      tekst.textContent = item.tekst;
+      regel.append(vink, tekst);
+      kaart.appendChild(regel);
+    });
+    elementen.oefeningen.appendChild(kaart);
+  }
+
   plan.oefeningen.forEach((oefening, oefeningIndex) => {
     const kaart = document.createElement("section");
     kaart.className = "oefening";
@@ -315,6 +349,21 @@ function renderOefeningen() {
       kaart.appendChild(rustLabel);
     }
 
+    (oefening.opwarm_sets ?? []).forEach((set) => {
+      const regel = document.createElement("div");
+      regel.className = "set opwarm" + (set.gedaan ? " gedaan" : "");
+      const vink = maakKnop("✓", "vink", set.gedaan ? "Opwarmset weer openzetten" : "Opwarmset afvinken");
+      vink.addEventListener("click", () => {
+        set.gedaan = !set.gedaan;
+        bewaarEnRender();
+      });
+      const tekst = document.createElement("span");
+      tekst.className = "opwarm-tekst";
+      tekst.textContent = `opwarmen · ${_toonKg(set.kg)} kg × ${set.reps}`;
+      regel.append(vink, tekst);
+      kaart.appendChild(regel);
+    });
+
     oefening.sets.forEach((set, setIndex) => {
       kaart.appendChild(maakSetRegel(oefening, set, oefeningIndex, setIndex));
     });
@@ -366,7 +415,7 @@ function maakOefeningMenu(oefening, oefeningIndex) {
       oefening.vervangen_van = oefening.naam;
       oefening.menuOpen = false;
       bewaarEnRender();
-      const invoer = elementen.oefeningen.querySelectorAll(".oefening")[oefeningIndex]?.querySelector(".oefening-naam");
+      const invoer = elementen.oefeningen.querySelectorAll(".oefening:not(.warmup-kaart)")[oefeningIndex]?.querySelector(".oefening-naam");
       if (invoer) { invoer.focus(); invoer.select(); }
     });
     rij.appendChild(vervang);
@@ -488,6 +537,10 @@ function maakInvoer(set, veld, eenheid) {
     bewaarConcept(true);
   });
   return input;
+}
+
+function _toonKg(kg) {
+  return String(kg).replace(".", ",");
 }
 
 function maakKnop(tekst, className, ariaLabel = "") {
@@ -694,7 +747,7 @@ function valideerSessie() {
 
 function bouwSessieJson() {
   const afgerond = formatLokaleDatumtijd();
-  return {
+  const sessie = {
     versie: 1,
     datum: gestart.slice(0, 10),
     gestart,
@@ -702,17 +755,26 @@ function bouwSessieJson() {
     plan_van: plan.gepland_op,
     naam: plan.naam,
     notitie: elementen.sessieNotitie.value.trim(),
-    oefeningen: plan.oefeningen.map((oefening) => {
+  };
+  if (plan.warming_up?.length) {
+    sessie.warming_up = plan.warming_up.map((item) => ({ tekst: item.tekst, gedaan: Boolean(item.gedaan) }));
+  }
+  sessie.oefeningen = plan.oefeningen.map((oefening) => {
       const resultaat = {
         naam: oefening.naam.trim(),
         sets: oefening.sets.map(maakContractSet),
       };
+      if (oefening.opwarm_sets?.length) {
+        resultaat.opwarm_sets = oefening.opwarm_sets.map((set) => ({
+          kg: set.kg, reps: set.reps, gedaan: Boolean(set.gedaan),
+        }));
+      }
       if (oefening.vervangen_van) resultaat.vervangen_van = oefening.vervangen_van;
       const laatsteGedaan = [...resultaat.sets].reverse().find((set) => set.gedaan);
       if (Number.isFinite(oefening.rpe) && laatsteGedaan) laatsteGedaan.rpe = oefening.rpe;
       return resultaat;
-    }),
-  };
+  });
+  return sessie;
 }
 
 function maakContractSet(set) {
