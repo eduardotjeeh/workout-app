@@ -29,6 +29,10 @@ button,
 input,
 textarea { font: inherit; }
 
+/* iOS zoomt automatisch in op velden met lettergrootte < 16px; dat voorkomen we hier. */
+input,
+textarea { font-size: max(1rem, 1em); }
+
 button { touch-action: manipulation; }
 
 header {
