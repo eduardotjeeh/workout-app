@@ -369,10 +369,6 @@ function maakSetRegel(oefening, set, oefeningIndex, setIndex) {
   const regel = document.createElement("div");
   regel.className = `set${set.status === "gedaan" ? " gedaan" : ""}${set.status === "overgeslagen" ? " overgeslagen" : ""}`;
 
-  const nummer = document.createElement("span");
-  nummer.className = "setnummer";
-  nummer.textContent = String(setIndex + 1);
-
   const vink = maakKnop("✓", "vink", set.status === "gedaan" ? "Set weer openzetten" : "Set afvinken");
   vink.addEventListener("click", () => {
     const wordtGedaan = set.status !== "gedaan";
@@ -383,10 +379,7 @@ function maakSetRegel(oefening, set, oefeningIndex, setIndex) {
 
   const waarden = document.createElement("div");
   waarden.className = "waarden";
-  const keer = document.createElement("span");
-  keer.className = "eenheid";
-  keer.textContent = "×";
-  waarden.append(maakKgStepper(oefening, set), keer, maakInvoer(set, "reps", "reps"));
+  waarden.append(maakStepper(oefening, set, "kg"), maakStepper(oefening, set, "reps"));
 
   const actie = set.extra
     ? maakKnop("×", "verwijder", "Extra set verwijderen")
@@ -404,30 +397,33 @@ function maakSetRegel(oefening, set, oefeningIndex, setIndex) {
     });
   }
 
-  regel.append(nummer, vink, waarden, actie);
+  regel.append(vink, waarden, actie);
   return regel;
 }
 
-function maakKgStepper(oefening, set) {
+function maakStepper(oefening, set, veld) {
   const groep = document.createElement("div");
-  groep.className = "kg-stepper";
-  const stap = Number.isFinite(oefening.stap_kg) && oefening.stap_kg > 0 ? oefening.stap_kg : 2.5;
+  groep.className = `stepper stepper-${veld}`;
+  const stap = veld === "kg"
+    ? (Number.isFinite(oefening.stap_kg) && oefening.stap_kg > 0 ? oefening.stap_kg : 2.5)
+    : 1;
+  const eenheid = veld === "kg" ? "kg" : "reps";
 
   const pasAan = (richting) => {
-    const basis = Number.isFinite(set.kg) ? set.kg : (set.gepland_kg ?? 0);
-    set.kg = Math.max(0, Math.round((basis + richting * stap) * 100) / 100);
+    const basis = Number.isFinite(set[veld]) ? set[veld] : (set[`gepland_${veld}`] ?? 0);
+    set[veld] = Math.max(0, Math.round((basis + richting * stap) * 100) / 100);
     bewaarEnRender();
   };
 
-  const minKnop = maakKnop("−", "stap", `${stap} kg minder`);
+  const minKnop = maakKnop("−", "stap", `${stap} ${eenheid} minder`);
   minKnop.addEventListener("click", () => pasAan(-1));
-  const plusKnop = maakKnop("+", "stap", `${stap} kg meer`);
+  const plusKnop = maakKnop("+", "stap", `${stap} ${eenheid} meer`);
   plusKnop.addEventListener("click", () => pasAan(1));
   const uitgeschakeld = set.status === "overgeslagen";
   minKnop.disabled = uitgeschakeld;
   plusKnop.disabled = uitgeschakeld;
 
-  groep.append(minKnop, maakInvoer(set, "kg", "kg"), plusKnop);
+  groep.append(minKnop, maakInvoer(set, veld, eenheid), plusKnop);
   return groep;
 }
 
