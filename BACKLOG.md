@@ -39,6 +39,10 @@ Op verzoek van Eduard plus eigen review-punten:
 
 📊-knop naast de instellingen: haalt `dashboard.html` uit `workout-data` op via de Contents API (zelfde PAT), toont hem in een sandboxed iframe en cachet hem in localStorage voor offline. De hub publiceert het dashboard via `scripts/dashboard.py` + push van Workout-Data (onderdeel van de wekelijkse checkup).
 
+## W9 — Bijgewerkt plan niet meer verborgen door lopende sessie ✅ (2026-07-20, Fable, v0.4.0)
+
+Bug uit de praktijk: na correctie van `stap_kg` in het plan bleef de app 2,5 kg stappen. Oorzaak: een actieve sessie (`concept`) wordt uit het plan van dát moment opgebouwd en krijgt voorrang boven een nieuw opgehaald plan — terecht om logs niet te verliezen, maar er was geen weg terug. Nu bewaart het concept een `bronJson`-vingerafdruk van het bronplan; wijkt het opgehaalde plan daarvan af, dan verschijnt een banner "Er staat een bijgewerkt plan klaar" met Laden (met bevestiging bij voortgang) en ×. Concepten van vóór v0.4.0 hebben geen `bronJson` en tonen de banner dus altijd één keer.
+
 ## W6 — Later / ideeën
 
 - Plate calculator (welke schijven op de stang).

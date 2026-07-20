@@ -20,6 +20,8 @@ let timerEinde = null;
 let synchronisatieBezig = false;
 let bezigMetAfronden = false;
 let conceptGewijzigd = false;
+let conceptBronJson = "";
+let nieuwPlanKlaar = null;
 let basisSyncStatus = { tekst: "Sync controleren…", soort: "" };
 
 const elementen = {
@@ -42,6 +44,7 @@ const elementen = {
   githubToken: document.getElementById("github-token"),
   instellingenMelding: document.getElementById("instellingen-melding"),
   appVersie: document.getElementById("app-versie"),
+  nieuwPlan: document.getElementById("nieuw-plan"),
   dashboard: document.getElementById("dashboard"),
   dashboardStatus: document.getElementById("dashboard-status"),
   dashboardFrame: document.getElementById("dashboard-frame"),
@@ -93,6 +96,8 @@ function stelGebeurtenissenIn() {
   document.getElementById("verbinding-testen").addEventListener("click", testVerbinding);
   document.getElementById("resultaat-sync").addEventListener("click", synchroniseerWachtrij);
   document.getElementById("nieuwe-sessie").addEventListener("click", startNieuweSessie);
+  document.getElementById("nieuw-plan-laden").addEventListener("click", laadNieuwPlan);
+  document.getElementById("nieuw-plan-sluit").addEventListener("click", verbergNieuwPlanBanner);
   elementen.syncStatus.addEventListener("click", () => {
     if (leesInstellingen()) synchroniseerWachtrij();
     else openInstellingen();
@@ -136,8 +141,15 @@ async function laadStartplan() {
     plan = concept.plan;
     gestart = concept.gestart;
     conceptGewijzigd = Boolean(concept.gewijzigd);
+    conceptBronJson = concept.bronJson ?? "";
     planBron = "herstelde sessie";
     elementen.sessieNotitie.value = concept.sessieNotitie ?? "";
+    // Wijkt het opgehaalde plan af van waar deze sessie op gebouwd is (bijv. gecorrigeerde
+    // gewichtsstappen)? Bied het nieuwe plan aan in plaats van het stilletjes te negeren.
+    if (bronplan && JSON.stringify(bronplan) !== conceptBronJson) {
+      nieuwPlanKlaar = bronplan;
+      elementen.nieuwPlan.classList.remove("verborgen");
+    }
   } else {
     if (!bronplan) {
       const antwoord = await fetch("./voorbeeld-plan.json");
@@ -147,6 +159,7 @@ async function laadStartplan() {
     }
     controleerPlan(bronplan);
     plan = maakWerkplan(bronplan);
+    conceptBronJson = JSON.stringify(bronplan);
     gestart = formatLokaleDatumtijd();
     conceptGewijzigd = false;
     planBron = bron;
@@ -155,6 +168,32 @@ async function laadStartplan() {
   }
 
   toonPlan();
+}
+
+function laadNieuwPlan() {
+  if (!nieuwPlanKlaar) return;
+  const heeftVoortgang = plan.oefeningen.some((oefening) =>
+    oefening.sets.some((set) => set.status !== "open"));
+  if (heeftVoortgang &&
+      !window.confirm("Het bijgewerkte plan laden? Wat je in deze sessie hebt afgevinkt gaat verloren.")) {
+    return;
+  }
+  controleerPlan(nieuwPlanKlaar);
+  plan = maakWerkplan(nieuwPlanKlaar);
+  conceptBronJson = JSON.stringify(nieuwPlanKlaar);
+  gestart = formatLokaleDatumtijd();
+  conceptGewijzigd = false;
+  planBron = "GitHub";
+  elementen.sessieNotitie.value = "";
+  verbergNieuwPlanBanner();
+  stopTimer();
+  bewaarConcept(false);
+  toonPlan();
+}
+
+function verbergNieuwPlanBanner() {
+  nieuwPlanKlaar = null;
+  elementen.nieuwPlan.classList.add("verborgen");
 }
 
 function controleerPlan(ruwPlan) {
@@ -502,6 +541,7 @@ function bewaarConcept(gewijzigd = conceptGewijzigd) {
     plan,
     sessieNotitie: elementen.sessieNotitie.value,
     gewijzigd: conceptGewijzigd,
+    bronJson: conceptBronJson,
   });
   if (!opgeslagen) {
     toonLogMelding("Het concept kan niet lokaal worden bewaard. Maak opslagruimte vrij voordat je verdergaat.");
@@ -628,6 +668,7 @@ async function rondSessieAf() {
 }
 
 async function startNieuweSessie() {
+  verbergNieuwPlanBanner();
   elementen.sessieJson.textContent = "";
   elementen.resultaatStatus.textContent = "";
   elementen.resultaat.classList.add("verborgen");

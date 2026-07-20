@@ -86,6 +86,7 @@ Regels:
 ## Offline-gedrag
 
 - `next.json` wordt bij elke online start gecachet in localStorage; de app werkt daarna volledig zonder netwerk.
+- Een lopende sessie (concept) heeft voorrang boven een nieuw opgehaald plan, zodat gelogde sets nooit verdwijnen. Het concept bewaart een `bronJson`-vingerafdruk van het plan waaruit het is opgebouwd; wijkt het opgehaalde plan daarvan af, dan meldt de app dat en kan de gebruiker het nieuwe plan expliciet laden.
 - Een afgeronde sessie gaat eerst naar een localStorage-wachtrij en pas daaruit weg na een geslaagde `PUT` (201/200). De app toont zichtbaar of er nog niet-gesynchroniseerde sessies staan.
 - Service worker cachet de app-bestanden zelf (app werkt in de gym ook bij nul bereik).
 
