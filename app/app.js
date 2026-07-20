@@ -183,7 +183,8 @@ function maakWerkplan(ruwPlan) {
     oefeningen: ruwPlan.oefeningen.map((oefening) => ({
       naam: oefening.naam,
       rust_sec: Number.isFinite(oefening.rust_sec) ? oefening.rust_sec : 0,
-      stap_kg: Number.isFinite(oefening.stap_kg) && oefening.stap_kg > 0 ? oefening.stap_kg : 2.5,
+      stap_kg: oefening.stap_kg === "dumbbell" ? "dumbbell"
+        : (Number.isFinite(oefening.stap_kg) && oefening.stap_kg > 0 ? oefening.stap_kg : 2.5),
       notitie: oefening.notitie ?? "",
       extra: false,
       sets: oefening.sets.map((set) => ({
@@ -401,23 +402,30 @@ function maakSetRegel(oefening, set, oefeningIndex, setIndex) {
   return regel;
 }
 
+function stapVoor(oefening, veld, basis, richting) {
+  if (veld !== "kg") return 1;
+  if (oefening.stap_kg === "dumbbell") {
+    // Dumbbellrek: 1 kg-stappen t/m 10 kg, daarboven 2 kg-stappen.
+    return (richting > 0 ? basis >= 10 : basis > 10) ? 2 : 1;
+  }
+  return Number.isFinite(oefening.stap_kg) && oefening.stap_kg > 0 ? oefening.stap_kg : 2.5;
+}
+
 function maakStepper(oefening, set, veld) {
   const groep = document.createElement("div");
   groep.className = `stepper stepper-${veld}`;
-  const stap = veld === "kg"
-    ? (Number.isFinite(oefening.stap_kg) && oefening.stap_kg > 0 ? oefening.stap_kg : 2.5)
-    : 1;
   const eenheid = veld === "kg" ? "kg" : "reps";
 
   const pasAan = (richting) => {
     const basis = Number.isFinite(set[veld]) ? set[veld] : (set[`gepland_${veld}`] ?? 0);
+    const stap = stapVoor(oefening, veld, basis, richting);
     set[veld] = Math.max(0, Math.round((basis + richting * stap) * 100) / 100);
     bewaarEnRender();
   };
 
-  const minKnop = maakKnop("−", "stap", `${stap} ${eenheid} minder`);
+  const minKnop = maakKnop("−", "stap", `${eenheid} verlagen`);
   minKnop.addEventListener("click", () => pasAan(-1));
-  const plusKnop = maakKnop("+", "stap", `${stap} ${eenheid} meer`);
+  const plusKnop = maakKnop("+", "stap", `${eenheid} verhogen`);
   plusKnop.addEventListener("click", () => pasAan(1));
   const uitgeschakeld = set.status === "overgeslagen";
   minKnop.disabled = uitgeschakeld;
