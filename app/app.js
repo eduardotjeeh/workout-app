@@ -623,7 +623,7 @@ function werkTimerBij() {
     window.clearInterval(timerInterval);
     timerInterval = null;
     elementen.timer.querySelector(".timer-label").textContent = "Rust voorbij";
-    piep();
+    speelBoksbel();
     if (navigator.vibrate) navigator.vibrate([250, 120, 250]);
   }
 }
@@ -671,7 +671,7 @@ function speelStilte() {
 // iOS Safari schorst de AudioContext als er geen audio-activiteit is. Drie maatregelen:
 // 1. Ontgrendel iOS-audio door een stil sample te spelen bij de eerste tap.
 // 2. Houd de context levend tijdens de rusttimer (speelStilte elke 4 s).
-// 3. Resume de context vlak voor de piep voor het geval hij toch geschorst is.
+// 3. Resume de context vlak voor de bel voor het geval hij toch geschorst is.
 let audioContext = null;
 function initAudio() {
   const Context = window.AudioContext || window.webkitAudioContext;
@@ -688,28 +688,75 @@ function initAudio() {
   if (audioContext?.state === "suspended") audioContext.resume();
 }
 
-function piep() {
+function speelBoksbel() {
   if (!audioContext) return;
   if (audioContext.state === "suspended") {
-    audioContext.resume().then(() => { if (audioContext.state === "running") speelPiep(); });
+    audioContext.resume().then(() => { if (audioContext.state === "running") speelBoksbelGeluid(); });
     return;
   }
-  if (audioContext.state === "running") speelPiep();
+  if (audioContext.state === "running") speelBoksbelGeluid();
 }
 
-function speelPiep() {
+function speelBoksbelGeluid() {
   try {
     const nu = audioContext.currentTime;
-    [0, 0.35].forEach((offset) => {
-      const toon = audioContext.createOscillator();
-      const volume = audioContext.createGain();
-      toon.frequency.value = 880;
-      volume.gain.setValueAtTime(0.0001, nu + offset);
-      volume.gain.exponentialRampToValueAtTime(0.4, nu + offset + 0.02);
-      volume.gain.exponentialRampToValueAtTime(0.0001, nu + offset + 0.28);
-      toon.connect(volume).connect(audioContext.destination);
-      toon.start(nu + offset);
-      toon.stop(nu + offset + 0.3);
+    const begrenzer = audioContext.createDynamicsCompressor();
+    begrenzer.threshold.value = -12;
+    begrenzer.knee.value = 8;
+    begrenzer.ratio.value = 6;
+    begrenzer.attack.value = 0.003;
+    begrenzer.release.value = 0.25;
+    begrenzer.connect(audioContext.destination);
+
+    // Drie metalen slagen, opgebouwd uit onharmonische boventonen. Dat geeft de
+    // herkenbare "ding-ding-ding" van de startbel van een boksronde.
+    [0, 0.32, 0.64].forEach((offset, slagNummer) => {
+      const start = nu + offset;
+      const slag = audioContext.createGain();
+      slag.gain.setValueAtTime(slagNummer === 2 ? 0.48 : 0.43, start);
+      slag.gain.exponentialRampToValueAtTime(0.0001, start + 1.65);
+      slag.connect(begrenzer);
+
+      [
+        [420, 0.3],
+        [635, 0.26],
+        [905, 0.2],
+        [1280, 0.13],
+        [1810, 0.075],
+        [2470, 0.035],
+      ].forEach(([frequentie, sterkte]) => {
+        const toon = audioContext.createOscillator();
+        const volume = audioContext.createGain();
+        toon.type = "sine";
+        toon.frequency.setValueAtTime(frequentie * 1.018, start);
+        toon.frequency.exponentialRampToValueAtTime(frequentie, start + 0.045);
+        volume.gain.value = sterkte;
+        toon.connect(volume).connect(slag);
+        toon.start(start);
+        toon.stop(start + 1.7);
+      });
+
+      // Een heel korte ruispuls simuleert de hamer die de bel raakt.
+      const aanslagDuur = 0.035;
+      const ruisBuffer = audioContext.createBuffer(
+        1,
+        Math.ceil(audioContext.sampleRate * aanslagDuur),
+        audioContext.sampleRate,
+      );
+      const samples = ruisBuffer.getChannelData(0);
+      for (let i = 0; i < samples.length; i += 1) {
+        samples[i] = (Math.random() * 2 - 1) * (1 - i / samples.length);
+      }
+      const aanslag = audioContext.createBufferSource();
+      const aanslagFilter = audioContext.createBiquadFilter();
+      const aanslagVolume = audioContext.createGain();
+      aanslag.buffer = ruisBuffer;
+      aanslagFilter.type = "bandpass";
+      aanslagFilter.frequency.value = 1700;
+      aanslagFilter.Q.value = 0.8;
+      aanslagVolume.gain.value = 0.18;
+      aanslag.connect(aanslagFilter).connect(aanslagVolume).connect(begrenzer);
+      aanslag.start(start);
     });
   } catch {
     // Geluid is best effort; de timer toont "Rust voorbij" hoe dan ook.

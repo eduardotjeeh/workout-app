@@ -3,7 +3,7 @@
 ## 1. Wat is dit
 
 Eigen workout-logger als PWA voor Eduards iPhone, ter vervanging van Strong.
-Kernidee: **de app is dom, de hub is slim.** De Gezondheid-repo (`../Gezondheid`) zet de volgende workout klaar (oefeningen, sets, kg); de app toont die, Eduard vinkt af of wijkt af, en het resultaat gaat terug. Coaching, progressie en analyse blijven in de Gezondheid-hub.
+Kernidee: **de app is dom, de hub is slim.** De Gezondheid-repo (`../../Gezondheid`) zet de volgende workout klaar (oefeningen, sets, kg); de app toont die, Eduard vinkt af of wijkt af, en het resultaat gaat terug. Coaching, progressie en analyse blijven in de Gezondheid-hub.
 
 Ontwerp en datacontract: `ARCHITECTUUR.md`. Bouwopdrachten: `BACKLOG.md`.
 
@@ -28,5 +28,5 @@ De app praat met `workout-data` via de GitHub Contents API met een fine-grained 
 - Geen build-stap, geen frameworks, geen dependencies: vanilla HTML/CSS/JS, direct te serveren door GitHub Pages vanuit `app/`. Elke afwijking eerst in `BACKLOG.md` motiveren.
 - Het datacontract in `ARCHITECTUUR.md` is leidend; wijzigingen daaraan altijd in dezelfde commit doorvoeren in `ARCHITECTUUR.md` én in code, en melden — de Gezondheid-hub leest hetzelfde contract.
 - Werkt offline-first: een sessie mag nooit verloren gaan doordat er geen netwerk is (buffer in localStorage, sync zodra het kan).
-- Meetdata nooit verzinnen; zie ook de regels in `../Gezondheid/AGENTS.md`.
+- Meetdata nooit verzinnen; zie ook de regels in `../../Gezondheid/AGENTS.md`.
 - Stijl: Nederlands, beknopt, ISO-datums, kg.
