@@ -67,7 +67,8 @@ h2 { font-size: 1.15rem; }
   line-height: 1.35;
 }
 
-main { padding: 0.75rem 1rem 8rem; }
+main { padding: 0.75rem 1rem 5.5rem; }
+main.timer-actief { padding-bottom: 10rem; }
 
 .icoonknop {
   min-width: 2.75rem;

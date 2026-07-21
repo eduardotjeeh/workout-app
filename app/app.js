@@ -17,6 +17,7 @@ let gestart = null;
 let planBron = "";
 let timerInterval = null;
 let timerEinde = null;
+let keepAliveInterval = null;
 let synchronisatieBezig = false;
 let bezigMetAfronden = false;
 let conceptGewijzigd = false;
@@ -103,6 +104,9 @@ function stelGebeurtenissenIn() {
     else openInstellingen();
   });
   elementen.sessieNotitie.addEventListener("input", () => bewaarConcept(true));
+  elementen.sessieNotitie.addEventListener("focus", () => {
+    setTimeout(() => elementen.sessieNotitie.scrollIntoView({ block: "center", behavior: "smooth" }), 300);
+  });
   window.addEventListener("online", () => {
     zetBasisSyncStatus("Online · sync controleren…", "");
     synchroniseerWachtrij();
@@ -605,9 +609,11 @@ function startTimer(seconden) {
   stopTimer();
   timerEinde = Date.now() + seconden * 1000;
   elementen.timer.classList.remove("verborgen");
+  document.querySelector("main").classList.add("timer-actief");
   elementen.timer.querySelector(".timer-label").textContent = "Rust";
   werkTimerBij();
   timerInterval = window.setInterval(werkTimerBij, 250);
+  startAudioKeepAlive();
 }
 
 function werkTimerBij() {
@@ -635,18 +641,63 @@ function stopTimer() {
   timerInterval = null;
   timerEinde = null;
   elementen.timer.classList.add("verborgen");
+  document.querySelector("main").classList.remove("timer-actief");
+  stopAudioKeepAlive();
 }
 
-// iOS ondersteunt navigator.vibrate niet; een korte dubbele piep is daar het signaal.
+function startAudioKeepAlive() {
+  stopAudioKeepAlive();
+  keepAliveInterval = window.setInterval(speelStilte, 4000);
+}
+
+function stopAudioKeepAlive() {
+  if (keepAliveInterval) {
+    window.clearInterval(keepAliveInterval);
+    keepAliveInterval = null;
+  }
+}
+
+function speelStilte() {
+  if (!audioContext || audioContext.state !== "running") return;
+  try {
+    const buffer = audioContext.createBuffer(1, 1, audioContext.sampleRate);
+    const source = audioContext.createBufferSource();
+    source.buffer = buffer;
+    source.connect(audioContext.destination);
+    source.start();
+  } catch { }
+}
+
+// iOS Safari schorst de AudioContext als er geen audio-activiteit is. Drie maatregelen:
+// 1. Ontgrendel iOS-audio door een stil sample te spelen bij de eerste tap.
+// 2. Houd de context levend tijdens de rusttimer (speelStilte elke 4 s).
+// 3. Resume de context vlak voor de piep voor het geval hij toch geschorst is.
 let audioContext = null;
 function initAudio() {
   const Context = window.AudioContext || window.webkitAudioContext;
-  if (!audioContext && Context) audioContext = new Context();
+  if (!audioContext && Context) {
+    audioContext = new Context();
+    try {
+      const buffer = audioContext.createBuffer(1, 1, audioContext.sampleRate);
+      const source = audioContext.createBufferSource();
+      source.buffer = buffer;
+      source.connect(audioContext.destination);
+      source.start();
+    } catch { }
+  }
   if (audioContext?.state === "suspended") audioContext.resume();
 }
 
 function piep() {
-  if (!audioContext || audioContext.state !== "running") return;
+  if (!audioContext) return;
+  if (audioContext.state === "suspended") {
+    audioContext.resume().then(() => { if (audioContext.state === "running") speelPiep(); });
+    return;
+  }
+  if (audioContext.state === "running") speelPiep();
+}
+
+function speelPiep() {
   try {
     const nu = audioContext.currentTime;
     [0, 0.35].forEach((offset) => {
