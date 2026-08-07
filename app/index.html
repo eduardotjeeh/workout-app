@@ -95,6 +95,10 @@
       </div>
     </div>
     <button id="afronden" type="button" class="primair">Sessie afronden</button>
+    <!-- De rustbel loopt via een media-element, niet via Web Audio: alleen zo
+         negeert iOS de stilteschakelaar en blijft het geluid lopen met het
+         scherm uit. Bron is een in de app gegenereerde WAV (stilte + bel). -->
+    <audio id="rust-audio" preload="auto"></audio>
   </footer>
 
   <script src="./versie.js"></script>

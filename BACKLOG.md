@@ -37,7 +37,7 @@ Op verzoek van Eduard plus eigen review-punten:
 
 ## W8 — Dashboard in de app ✅ (2026-07-19, Fable, v0.3.0)
 
-📊-knop naast de instellingen: haalt `dashboard.html` uit `workout-data` op via de Contents API (zelfde PAT), toont hem in een sandboxed iframe en cachet hem in localStorage voor offline. De hub publiceert het dashboard via `scripts/dashboard.py` + push van Workout-Data (onderdeel van de wekelijkse checkup).
+📊-knop naast de instellingen: haalt `dashboard.html` uit `workout-data` op via de Contents API (zelfde PAT), toont hem in een sandboxed iframe en cachet hem in localStorage voor offline. Codex publiceert het dashboard dagelijks via `scripts/dashboard.py` + commit/push van Workout-Data.
 
 ## W9 — Bijgewerkt plan niet meer verborgen door lopende sessie ✅ (2026-07-20, Fable, v0.4.0)
 
@@ -46,6 +46,16 @@ Bug uit de praktijk: na correctie van `stap_kg` in het plan bleef de app 2,5 kg 
 ## W10 — Warming-up in plan en app ✅ (2026-07-20, Fable, v0.5.0)
 
 Evidence-based warming-upframework vastgelegd in `Gezondheid/data/training/schema.md` §Warming-up (kort algemeen + ramp-sets alleen bij de eerste oefening per patroon, geen statisch rekken). Contract: plan-niveau `warming_up`-checklist en per oefening `opwarm_sets`; beide afvinkbaar in de app (aparte compacte stijl, geen rusttimer, tellen nooit mee als werksets) en komen met `gedaan`-vlag terug in het sessie-JSON. Plan- en importprompts bijgewerkt.
+
+## W11 — Rustbel hoorbaar op iOS ✅ (2026-08-07, Fable, v0.7.0)
+
+Eduard hoorde de bel nooit, ook niet met de app open. Diagnose: de synthese was in orde (offline gerenderd: piek 0,68, drie slagen), maar Web Audio valt op iOS onder de "ambient"-categorie en wordt dus gedempt door de stilteschakelaar; daarnaast bevriest `setInterval` zodra de PWA naar de achtergrond gaat, waarna `speelBoksbel()` een geschorste context vindt en `resume()` buiten een user gesture weigert. `navigator.vibrate` bestaat niet op iOS, dus er was ook geen tweede signaal.
+
+Oplossing: de rustperiode wordt per set als één WAV gerenderd — `rust_sec` stilte gevolgd door dezelfde bel — en afgespeeld via een `<audio>`-element, gestart binnen de tik waarmee de set wordt afgevinkt. Media-afspelen negeert de stilteschakelaar en loopt door met het scherm uit. `bouwBelGeluid()` is losgetrokken zodat live (Web Audio) en vooraf gerenderd (OfflineAudioContext) dezelfde klank delen; Web Audio blijft de fallback voor desktop. MediaSession zet een Now Playing-kaart op het vergrendelscherm waarvan de voortgangsbalk de rusttimer ís; pauze/stop daar breekt de rust af.
+
+Gemeten: WAV van 180 s = 7,7 MB, bouwtijd 10,8 ms (ruim binnen de tik); bel exact op de grens (piek 0 in seconden 0–4, 0,67 in seconde 5 bij een test van 5 s); "+30 s" hergenereert; "Stop rust" ruimt blob-URL en MediaSession op.
+
+Niet haalbaar gebleken: een echte aftellende timer in het meldingencentrum. iOS-PWA's kunnen geen lokale notificatie inplannen, Web Push (iOS 16.4+) vereist een server die op het juiste moment pusht — de backend die deze architectuur bewust niet heeft — en Live Activities vragen een native app.
 
 ## W6 — Later / ideeën
 

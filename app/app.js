@@ -39,6 +39,7 @@ const elementen = {
   afronden: document.getElementById("afronden"),
   timer: document.getElementById("timer"),
   timerTijd: document.getElementById("timer-tijd"),
+  rustAudio: document.getElementById("rust-audio"),
   resultaatStatus: document.getElementById("resultaat-status"),
   sessieJson: document.getElementById("sessie-json"),
   githubOwner: document.getElementById("github-owner"),
@@ -55,6 +56,7 @@ async function init() {
   elementen.appVersie.textContent = `versie ${APP_VERSIE}`;
   registreerServiceWorker();
   stelGebeurtenissenIn();
+  bereidBelVoor();
   vraagWakeLock();
   vulInstellingenformulier();
   werkSyncStatusBij();
@@ -605,6 +607,10 @@ function bewaarConcept(gewijzigd = conceptGewijzigd) {
   }
 }
 
+function formatteerTijd(seconden) {
+  return `${Math.floor(seconden / 60)}:${String(seconden % 60).padStart(2, "0")}`;
+}
+
 function startTimer(seconden) {
   stopTimer();
   timerEinde = Date.now() + seconden * 1000;
@@ -613,17 +619,22 @@ function startTimer(seconden) {
   elementen.timer.querySelector(".timer-label").textContent = "Rust";
   werkTimerBij();
   timerInterval = window.setInterval(werkTimerBij, 250);
-  startAudioKeepAlive();
+  // Deze aanroep zit nog in de tik waarmee de set is afgevinkt; iOS staat
+  // afspelen alleen binnen zo'n gebaar toe. Lukt het niet, dan valt de bel
+  // terug op Web Audio en is de keep-alive weer nodig.
+  if (!startRustAudio(seconden)) startAudioKeepAlive();
 }
 
 function werkTimerBij() {
   const resterend = Math.max(0, Math.ceil((timerEinde - Date.now()) / 1000));
-  elementen.timerTijd.textContent = `${Math.floor(resterend / 60)}:${String(resterend % 60).padStart(2, "0")}`;
+  elementen.timerTijd.textContent = formatteerTijd(resterend);
   if (resterend === 0) {
     window.clearInterval(timerInterval);
     timerInterval = null;
     elementen.timer.querySelector(".timer-label").textContent = "Rust voorbij";
-    speelBoksbel();
+    // Speelt het media-element, dan zit de bel daar al in; anders alsnog
+    // via Web Audio, zodat de desktop en oudere browsers niet stil blijven.
+    if (!rustAudioLoopt()) speelBoksbel();
     if (navigator.vibrate) navigator.vibrate([250, 120, 250]);
   }
 }
@@ -634,6 +645,8 @@ function verlengTimer(seconden) {
   elementen.timer.querySelector(".timer-label").textContent = "Rust";
   if (!timerInterval) timerInterval = window.setInterval(werkTimerBij, 250);
   werkTimerBij();
+  // Ook dit is een knoptik, dus opnieuw starten mag.
+  if (!startRustAudio((timerEinde - Date.now()) / 1000)) stopRustAudio();
 }
 
 function stopTimer() {
@@ -643,6 +656,7 @@ function stopTimer() {
   elementen.timer.classList.add("verborgen");
   document.querySelector("main").classList.remove("timer-actief");
   stopAudioKeepAlive();
+  stopRustAudio();
 }
 
 function startAudioKeepAlive() {
@@ -699,68 +713,217 @@ function speelBoksbel() {
 
 function speelBoksbelGeluid() {
   try {
-    const nu = audioContext.currentTime;
-    const begrenzer = audioContext.createDynamicsCompressor();
-    begrenzer.threshold.value = -12;
-    begrenzer.knee.value = 8;
-    begrenzer.ratio.value = 6;
-    begrenzer.attack.value = 0.003;
-    begrenzer.release.value = 0.25;
-    begrenzer.connect(audioContext.destination);
-
-    // Drie metalen slagen, opgebouwd uit onharmonische boventonen. Dat geeft de
-    // herkenbare "ding-ding-ding" van de startbel van een boksronde.
-    [0, 0.32, 0.64].forEach((offset, slagNummer) => {
-      const start = nu + offset;
-      const slag = audioContext.createGain();
-      slag.gain.setValueAtTime(slagNummer === 2 ? 0.48 : 0.43, start);
-      slag.gain.exponentialRampToValueAtTime(0.0001, start + 1.65);
-      slag.connect(begrenzer);
-
-      [
-        [420, 0.3],
-        [635, 0.26],
-        [905, 0.2],
-        [1280, 0.13],
-        [1810, 0.075],
-        [2470, 0.035],
-      ].forEach(([frequentie, sterkte]) => {
-        const toon = audioContext.createOscillator();
-        const volume = audioContext.createGain();
-        toon.type = "sine";
-        toon.frequency.setValueAtTime(frequentie * 1.018, start);
-        toon.frequency.exponentialRampToValueAtTime(frequentie, start + 0.045);
-        volume.gain.value = sterkte;
-        toon.connect(volume).connect(slag);
-        toon.start(start);
-        toon.stop(start + 1.7);
-      });
-
-      // Een heel korte ruispuls simuleert de hamer die de bel raakt.
-      const aanslagDuur = 0.035;
-      const ruisBuffer = audioContext.createBuffer(
-        1,
-        Math.ceil(audioContext.sampleRate * aanslagDuur),
-        audioContext.sampleRate,
-      );
-      const samples = ruisBuffer.getChannelData(0);
-      for (let i = 0; i < samples.length; i += 1) {
-        samples[i] = (Math.random() * 2 - 1) * (1 - i / samples.length);
-      }
-      const aanslag = audioContext.createBufferSource();
-      const aanslagFilter = audioContext.createBiquadFilter();
-      const aanslagVolume = audioContext.createGain();
-      aanslag.buffer = ruisBuffer;
-      aanslagFilter.type = "bandpass";
-      aanslagFilter.frequency.value = 1700;
-      aanslagFilter.Q.value = 0.8;
-      aanslagVolume.gain.value = 0.18;
-      aanslag.connect(aanslagFilter).connect(aanslagVolume).connect(begrenzer);
-      aanslag.start(start);
-    });
+    bouwBelGeluid(audioContext, audioContext.destination, audioContext.currentTime);
   } catch {
     // Geluid is best effort; de timer toont "Rust voorbij" hoe dan ook.
   }
+}
+
+// Bouwt de bel in een willekeurige context, zodat dezelfde klank zowel live
+// (Web Audio) als vooraf gerenderd (OfflineAudioContext) gebruikt kan worden.
+function bouwBelGeluid(context, bestemming, startTijd) {
+  const begrenzer = context.createDynamicsCompressor();
+  begrenzer.threshold.value = -12;
+  begrenzer.knee.value = 8;
+  begrenzer.ratio.value = 6;
+  begrenzer.attack.value = 0.003;
+  begrenzer.release.value = 0.25;
+  begrenzer.connect(bestemming);
+
+  // Drie metalen slagen, opgebouwd uit onharmonische boventonen. Dat geeft de
+  // herkenbare "ding-ding-ding" van de startbel van een boksronde.
+  [0, 0.32, 0.64].forEach((offset, slagNummer) => {
+    const start = startTijd + offset;
+    const slag = context.createGain();
+    slag.gain.setValueAtTime(slagNummer === 2 ? 0.48 : 0.43, start);
+    slag.gain.exponentialRampToValueAtTime(0.0001, start + 1.65);
+    slag.connect(begrenzer);
+
+    [
+      [420, 0.3],
+      [635, 0.26],
+      [905, 0.2],
+      [1280, 0.13],
+      [1810, 0.075],
+      [2470, 0.035],
+    ].forEach(([frequentie, sterkte]) => {
+      const toon = context.createOscillator();
+      const volume = context.createGain();
+      toon.type = "sine";
+      toon.frequency.setValueAtTime(frequentie * 1.018, start);
+      toon.frequency.exponentialRampToValueAtTime(frequentie, start + 0.045);
+      volume.gain.value = sterkte;
+      toon.connect(volume).connect(slag);
+      toon.start(start);
+      toon.stop(start + 1.7);
+    });
+
+    // Een heel korte ruispuls simuleert de hamer die de bel raakt.
+    const aanslagDuur = 0.035;
+    const ruisBuffer = context.createBuffer(
+      1,
+      Math.ceil(context.sampleRate * aanslagDuur),
+      context.sampleRate,
+    );
+    const samples = ruisBuffer.getChannelData(0);
+    for (let i = 0; i < samples.length; i += 1) {
+      samples[i] = (Math.random() * 2 - 1) * (1 - i / samples.length);
+    }
+    const aanslag = context.createBufferSource();
+    const aanslagFilter = context.createBiquadFilter();
+    const aanslagVolume = context.createGain();
+    aanslag.buffer = ruisBuffer;
+    aanslagFilter.type = "bandpass";
+    aanslagFilter.frequency.value = 1700;
+    aanslagFilter.Q.value = 0.8;
+    aanslagVolume.gain.value = 0.18;
+    aanslag.connect(aanslagFilter).connect(aanslagVolume).connect(begrenzer);
+    aanslag.start(start);
+  });
+}
+
+// De rustbel als media-element
+// ----------------------------
+// Web Audio valt op iOS onder de "ambient"-categorie: het zwijgt zodra de
+// stilteschakelaar om staat, en de AudioContext wordt geschorst zodra de PWA
+// naar de achtergrond gaat — precies wanneer je de bel nodig hebt. Een
+// <audio>-element valt onder media-afspelen: dat blijft hoorbaar op stil en
+// speelt door met het scherm uit. Daarom rendert de app per set één WAV van
+// [rustduur stilte + bel] en start die op het moment van afvinken.
+
+const BEL_DUUR_SEC = 2.4;
+const BEL_RENDER_RATE = 44100; // Safari is het meest voorspelbaar op 44,1 kHz
+const BEL_DECIMATIE = 2; // → 22,05 kHz; ruim boven de hoogste boventoon (2470 Hz)
+const RUST_SAMPLERATE = BEL_RENDER_RATE / BEL_DECIMATIE;
+
+let belSamples = null;
+let rustAudioUrl = null;
+let rustAudioActief = false;
+
+async function bereidBelVoor() {
+  const Offline = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+  if (belSamples || !Offline) return;
+  try {
+    const bron = new Offline(1, Math.ceil(BEL_RENDER_RATE * BEL_DUUR_SEC), BEL_RENDER_RATE);
+    bouwBelGeluid(bron, bron.destination, 0);
+    const gerenderd = await bron.startRendering();
+    belSamples = verkleinSamples(gerenderd.getChannelData(0), BEL_DECIMATIE);
+  } catch (fout) {
+    // Zonder gerenderde bel valt de app terug op Web Audio.
+    console.warn("Bel voorrenderen mislukt:", veiligeFoutmelding(fout));
+    belSamples = null;
+  }
+}
+
+function verkleinSamples(bron, factor) {
+  const uit = new Float32Array(Math.floor(bron.length / factor));
+  for (let i = 0; i < uit.length; i += 1) {
+    let som = 0;
+    for (let j = 0; j < factor; j += 1) som += bron[i * factor + j];
+    uit[i] = som / factor;
+  }
+  return uit;
+}
+
+// Stilte kost geen rekenwerk: een ArrayBuffer begint op nul, dus alleen de
+// bel aan het eind hoeft weggeschreven te worden.
+function maakRustWavBlob(stilteSeconden) {
+  const stilteSamples = Math.max(0, Math.round(stilteSeconden * RUST_SAMPLERATE));
+  const totaal = stilteSamples + belSamples.length;
+  const buffer = new ArrayBuffer(44 + totaal * 2);
+  const dv = new DataView(buffer);
+  const tekst = (positie, waarde) => {
+    for (let i = 0; i < waarde.length; i += 1) dv.setUint8(positie + i, waarde.charCodeAt(i));
+  };
+
+  tekst(0, "RIFF");
+  dv.setUint32(4, 36 + totaal * 2, true);
+  tekst(8, "WAVE");
+  tekst(12, "fmt ");
+  dv.setUint32(16, 16, true);
+  dv.setUint16(20, 1, true); // PCM
+  dv.setUint16(22, 1, true); // mono
+  dv.setUint32(24, RUST_SAMPLERATE, true);
+  dv.setUint32(28, RUST_SAMPLERATE * 2, true);
+  dv.setUint16(32, 2, true);
+  dv.setUint16(34, 16, true);
+  tekst(36, "data");
+  dv.setUint32(40, totaal * 2, true);
+
+  let positie = 44 + stilteSamples * 2;
+  for (let i = 0; i < belSamples.length; i += 1) {
+    const waarde = Math.max(-1, Math.min(1, belSamples[i]));
+    dv.setInt16(positie, waarde < 0 ? waarde * 0x8000 : waarde * 0x7fff, true);
+    positie += 2;
+  }
+  return new Blob([buffer], { type: "audio/wav" });
+}
+
+function startRustAudio(seconden) {
+  const audio = elementen.rustAudio;
+  if (!audio || !belSamples || !(seconden >= 0)) return false;
+  stopRustAudio();
+  try {
+    rustAudioUrl = URL.createObjectURL(maakRustWavBlob(seconden));
+    audio.src = rustAudioUrl;
+    const belofte = audio.play();
+    if (belofte && belofte.catch) belofte.catch(() => { rustAudioActief = false; });
+    rustAudioActief = true;
+    zetMediaSessie(Math.round(seconden));
+    return true;
+  } catch (fout) {
+    console.warn("Rustaudio starten mislukt:", veiligeFoutmelding(fout));
+    stopRustAudio();
+    return false;
+  }
+}
+
+function rustAudioLoopt() {
+  const audio = elementen.rustAudio;
+  return Boolean(rustAudioActief && audio && !audio.paused && !audio.ended && !audio.error);
+}
+
+function stopRustAudio() {
+  rustAudioActief = false;
+  const audio = elementen.rustAudio;
+  if (audio) {
+    try {
+      audio.pause();
+      audio.removeAttribute("src");
+      audio.load();
+    } catch { }
+  }
+  if (rustAudioUrl) {
+    URL.revokeObjectURL(rustAudioUrl);
+    rustAudioUrl = null;
+  }
+  if ("mediaSession" in navigator) {
+    try {
+      navigator.mediaSession.metadata = null;
+      navigator.mediaSession.playbackState = "none";
+    } catch { }
+  }
+}
+
+// Zet de Now Playing-kaart op het vergrendelscherm. Een aftellende teller kan
+// een PWA daar niet tonen, maar de voortgangsbalk van dit fragment ís de
+// rusttimer, en pauzeren komt neer op de rust afbreken.
+function zetMediaSessie(seconden) {
+  if (!("mediaSession" in navigator)) return;
+  try {
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: `Rust ${formatteerTijd(seconden)}`,
+      artist: plan?.naam || "Workout",
+      album: "Workout",
+      artwork: [
+        { src: "./icon-192.png", sizes: "192x192", type: "image/png" },
+        { src: "./icon-512.png", sizes: "512x512", type: "image/png" },
+      ],
+    });
+    navigator.mediaSession.playbackState = "playing";
+    navigator.mediaSession.setActionHandler("pause", () => stopTimer());
+    navigator.mediaSession.setActionHandler("stop", () => stopTimer());
+  } catch { }
 }
 
 // Scherm aan houden tijdens de sessie, zodat de rusttimer blijft lopen.
