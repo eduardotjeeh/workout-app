@@ -57,6 +57,16 @@ Gemeten: WAV van 180 s = 7,7 MB, bouwtijd 10,8 ms (ruim binnen de tik); bel exac
 
 Niet haalbaar gebleken: een echte aftellende timer in het meldingencentrum. iOS-PWA's kunnen geen lokale notificatie inplannen, Web Push (iOS 16.4+) vereist een server die op het juiste moment pusht — de backend die deze architectuur bewust niet heeft — en Live Activities vragen een native app.
 
+## W12 — Rustbel naast een podcast ✅ (2026-08-12, Fable, v0.8.0)
+
+Vervolg op W11. De bel werkt nu, maar Eduard luistert tijdens de rust podcasts en muziek: iOS pauzeert die zodra de rusttimer start. Dat is geen bug maar de prijs van de W11-oplossing — de app speelt de hele rustperiode één WAV (stilte + bel) af, en media-afspelen onderbreekt andere audio zolang die sessie loopt. De bel zelf duurt 2,4 s; de onderbreking duurt de volle rust.
+
+Oplossing: instelling **Bel mengen met podcast of muziek** (standaard uit, dus bestaand gedrag blijft). Uit → `navigator.audioSession.type = "playback"` + Now Playing-kaart, zoals in W11. Aan → `"ambient"`: iOS mixt de bel met andere audio in plaats van die te onderbreken, en de app laat de Now Playing-kaart bij de podcast-app. Omschakelen tijdens een lopende rust gaat direct in — de `change` op de schakelaar is zelf een user gesture, dus de WAV mag met de resterende tijd opnieuw starten.
+
+Afruil, expliciet in de UI benoemd: `ambient` wordt door iOS gedempt zodra de zijschakelaar op stil staat, en biedt minder garantie met het scherm uit. Daarom een keuze en geen nieuwe standaard. Ontbreekt `navigator.audioSession` (< Safari 16.4, en Chromium), dan staat de schakelaar uit met uitleg.
+
+Getest op Chromium (API afwezig → schakelaar uitgeschakeld met melding) en met een gestubde `navigator.audioSession`: uit → `playback` + kaart "Rust 0:05", aan → `ambient` en geen kaart, omschakelen tijdens een rust van 60 s behield de resterende tijd en liet het element doorspelen, "Stop rust" ruimde blob-URL en timer op. Tikvlak 44 px, geen horizontale scroll op 375 px. **Nog te bevestigen in de sportschool:** of de bel in ambient-modus hoorbaar blijft met het scherm uit en de app op de achtergrond.
+
 ## W6 — Later / ideeën
 
 - Plate calculator (welke schijven op de stang).

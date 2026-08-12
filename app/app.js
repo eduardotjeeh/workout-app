@@ -3,6 +3,7 @@
 
 const OPSLAG = {
   instellingen: "workout-instellingen-v1",
+  geluid: "workout-geluid-v1",
   planCache: "workout-plan-cache-v1",
   concept: "workout-actieve-sessie-v1",
   wachtrij: "workout-sync-wachtrij-v1",
@@ -45,6 +46,8 @@ const elementen = {
   githubOwner: document.getElementById("github-owner"),
   githubToken: document.getElementById("github-token"),
   instellingenMelding: document.getElementById("instellingen-melding"),
+  audioMengen: document.getElementById("audio-mengen"),
+  audioMengenMelding: document.getElementById("audio-mengen-melding"),
   appVersie: document.getElementById("app-versie"),
   nieuwPlan: document.getElementById("nieuw-plan"),
   dashboard: document.getElementById("dashboard"),
@@ -59,6 +62,7 @@ async function init() {
   bereidBelVoor();
   vraagWakeLock();
   vulInstellingenformulier();
+  vulGeluidsformulier();
   werkSyncStatusBij();
   await laadStartplan();
   await synchroniseerWachtrij();
@@ -96,6 +100,7 @@ function stelGebeurtenissenIn() {
     toonHoofdscherm();
   });
   document.getElementById("instellingen-opslaan").addEventListener("click", slaInstellingenOp);
+  elementen.audioMengen.addEventListener("change", slaGeluidsinstellingOp);
   document.getElementById("verbinding-testen").addEventListener("click", testVerbinding);
   document.getElementById("resultaat-sync").addEventListener("click", synchroniseerWachtrij);
   document.getElementById("nieuwe-sessie").addEventListener("click", startNieuweSessie);
@@ -790,6 +795,14 @@ function bouwBelGeluid(context, bestemming, startTijd) {
 // <audio>-element valt onder media-afspelen: dat blijft hoorbaar op stil en
 // speelt door met het scherm uit. Daarom rendert de app per set één WAV van
 // [rustduur stilte + bel] en start die op het moment van afvinken.
+//
+// Keerzijde: media-afspelen onderbreekt andere audio, en omdat de WAV de hele
+// rust duurt blijft een podcast de hele rustpauze gepauzeerd. Wie tijdens de
+// rust luistert kan daarom "mengen" aanzetten; dan zet de app de audiosessie
+// op "ambient" (mixt met andere audio) in plaats van "playback", en laat ze
+// de Now Playing-kaart bij de podcast-app. Prijs daarvan is dat iOS ambient
+// audio dempt zodra de zijschakelaar op stil staat. Dat is een echte keuze,
+// geen bug — vandaar een instelling in plaats van een vaste waarde.
 
 const BEL_DUUR_SEC = 2.4;
 const BEL_RENDER_RATE = 44100; // Safari is het meest voorspelbaar op 44,1 kHz
@@ -799,6 +812,53 @@ const RUST_SAMPLERATE = BEL_RENDER_RATE / BEL_DECIMATIE;
 let belSamples = null;
 let rustAudioUrl = null;
 let rustAudioActief = false;
+let mengMetAndereAudio = false;
+
+// navigator.audioSession bestaat op Safari 16.4+; elders is er niets te kiezen
+// en houdt de browser zijn eigen gedrag aan.
+function audioSessieBeschikbaar() {
+  return typeof navigator !== "undefined" && "audioSession" in navigator;
+}
+
+function zetAudioSessie(soort) {
+  if (!audioSessieBeschikbaar()) return false;
+  try {
+    navigator.audioSession.type = soort;
+    return true;
+  } catch (fout) {
+    console.warn("Audiosessie zetten mislukt:", veiligeFoutmelding(fout));
+    return false;
+  }
+}
+
+function vulGeluidsformulier() {
+  mengMetAndereAudio = leesJson(OPSLAG.geluid)?.mengen === true;
+  elementen.audioMengen.checked = mengMetAndereAudio;
+  if (!audioSessieBeschikbaar()) {
+    elementen.audioMengen.disabled = true;
+    elementen.audioMengenMelding.className = "melding";
+    elementen.audioMengenMelding.textContent =
+      "Deze browser kan de audiosessie niet instellen; de bel gedraagt zich hier zoals de browser bepaalt.";
+  }
+}
+
+function slaGeluidsinstellingOp() {
+  mengMetAndereAudio = elementen.audioMengen.checked;
+  const bewaard = schrijfJson(OPSLAG.geluid, { mengen: mengMetAndereAudio });
+  elementen.audioMengenMelding.className = bewaard ? "melding goed" : "melding fout";
+  elementen.audioMengenMelding.textContent = bewaard
+    ? (mengMetAndereAudio
+        ? "Bel mengt met andere audio. Zet de zijschakelaar dan niet op stil."
+        : "Bel onderbreekt andere audio en is altijd hoorbaar.")
+    : "Instelling lokaal opslaan is mislukt.";
+  // Een lopende rust draait nog op de oude sessiesoort. Deze change komt uit
+  // een tik op de schakelaar, dus opnieuw starten mag: zo gaat de keuze direct
+  // in en hoeft er niet eerst een set afgevinkt te worden.
+  if (timerEinde) {
+    const resterend = Math.max(0, (timerEinde - Date.now()) / 1000);
+    if (!startRustAudio(resterend)) stopRustAudio();
+  }
+}
 
 async function bereidBelVoor() {
   const Offline = window.OfflineAudioContext || window.webkitOfflineAudioContext;
@@ -864,12 +924,15 @@ function startRustAudio(seconden) {
   if (!audio || !belSamples || !(seconden >= 0)) return false;
   stopRustAudio();
   try {
+    zetAudioSessie(mengMetAndereAudio ? "ambient" : "playback");
     rustAudioUrl = URL.createObjectURL(maakRustWavBlob(seconden));
     audio.src = rustAudioUrl;
     const belofte = audio.play();
     if (belofte && belofte.catch) belofte.catch(() => { rustAudioActief = false; });
     rustAudioActief = true;
-    zetMediaSessie(Math.round(seconden));
+    // Bij mengen blijft de Now Playing-kaart van de podcast staan: die overnemen
+    // voor een tijdbalk van een stille WAV kost meer dan het oplevert.
+    if (!mengMetAndereAudio) zetMediaSessie(Math.round(seconden));
     return true;
   } catch (fout) {
     console.warn("Rustaudio starten mislukt:", veiligeFoutmelding(fout));

@@ -292,6 +292,30 @@ button.rpe-knop.actief {
 .veldblok textarea { width: 100%; padding: 0.7rem; color: var(--tekst); }
 .veldblok textarea { min-height: 5.5rem; resize: vertical; }
 
+.subkop {
+  margin: 1.5rem 0 0;
+  font-size: 1rem;
+}
+
+.keuzeblok {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-height: 2.75rem; /* het hele label is het tikvlak, niet alleen het vinkje */
+  margin-top: 0.75rem;
+  color: var(--tekst);
+  font-size: 0.95rem;
+}
+
+.keuzeblok input {
+  width: 1.35rem;
+  height: 1.35rem;
+  flex-shrink: 0;
+  accent-color: var(--accent);
+}
+
+.keuzeblok input:disabled + span { color: var(--gedempt); }
+
 .knoppenrij { gap: 0.75rem; margin-top: 1rem; }
 .knoppenrij > * { flex: 1; }
 

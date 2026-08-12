@@ -96,6 +96,13 @@ Regels:
 - Een afgeronde sessie gaat eerst naar een localStorage-wachtrij en pas daaruit weg na een geslaagde `PUT` (201/200). De app toont zichtbaar of er nog niet-gesynchroniseerde sessies staan.
 - Service worker cachet de app-bestanden zelf (app werkt in de gym ook bij nul bereik).
 
+## Rustbel en audiosessie
+
+- De rustperiode wordt per set gerenderd als één WAV van `rust_sec` stilte gevolgd door de bel, en gestart via een `<audio>`-element binnen de tik waarmee de set wordt afgevinkt. Alleen zo blijft de bel hoorbaar met het scherm uit; Web Audio wordt op iOS geschorst zodra de PWA naar de achtergrond gaat.
+- Omdat die WAV de hele rust duurt, houdt de app de audiosessie ook de hele rust bezet. Dat is zichtbaar voor andere audio: onder `playback` pauzeert iOS een lopende podcast tot de rust voorbij is.
+- Daarom is er de instelling **Bel mengen met podcast of muziek** (`workout-geluid-v1` in localStorage, standaard uit). Uit → `navigator.audioSession.type = "playback"` plus een Now Playing-kaart; aan → `"ambient"`, waardoor andere audio gewoon doorspeelt en de app de Now Playing-kaart met rust laat.
+- De keuze is een afruil, geen instelling met een goed antwoord: `ambient` wordt door iOS gedempt als de zijschakelaar op stil staat, en geeft minder garantie dat de bel klinkt met het scherm uit. `navigator.audioSession` bestaat vanaf Safari 16.4; ontbreekt de API, dan staat de schakelaar uit en meldt het instellingenscherm dat.
+
 ## Token & veiligheid
 
 - Fine-grained PAT, alleen repo `workout-data`, alleen permission "Contents: read and write", verloopdatum max 1 jaar.
