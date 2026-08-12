@@ -47,7 +47,7 @@ Naast plan en sessies publiceert de hub ook `dashboard.html` (zelfstandig HTML-b
 }
 ```
 
-`stap_kg` (optioneel, standaard 2,5) is de kleinste gewichtsstap van de machine/oefening; de plus/min-knoppen in de app stappen hiermee. Afspraken: schijfoefeningen 2,5; machines/kabels 1,25. Speciale waarde: de tekst `"dumbbell"` — de app stapt dan 1 kg t/m 10 kg en daarboven 2 kg (het dumbbellrek).
+`stap_kg` (optioneel, standaard 2,5) is de kleinste gewichtsstap van de machine/oefening; de plus/min-knoppen in de app stappen hiermee. Afspraken: schijfoefeningen 2,5; machines en kabels krijgen de werkelijke stap van hun stapel (in Eduards sportschool 2,3 voor de 15 lbs-stapel en 1,1 voor de 10 lbs-stapel — zie `Gezondheid/data/training/schema.md` §Gewichtsstappen). Speciale waarde: de tekst `"dumbbell"` — de app stapt dan 1 kg t/m 10 kg en daarboven 2 kg (het dumbbellrek).
 
 Warming-up (optioneel, berekend volgens `Gezondheid/data/training/schema.md` §Warming-up):
 - plan-niveau `"warming_up": [{ "tekst": "3–4 min hometrainer, rustig tempo" }]` — algemene checklist, afvinkbaar in de app;
