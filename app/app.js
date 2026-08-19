@@ -25,6 +25,7 @@ let conceptGewijzigd = false;
 let conceptBronJson = "";
 let nieuwPlanKlaar = null;
 let basisSyncStatus = { tekst: "Sync controleren…", soort: "" };
+let laatsteSyncFout = "";
 
 const elementen = {
   planNaam: document.getElementById("plan-naam"),
@@ -1146,6 +1147,7 @@ async function synchroniseerWachtrij() {
   }
 
   synchronisatieBezig = true;
+  laatsteSyncFout = "";
   werkSyncStatusBij();
   try {
     let wachtrij = leesWachtrij();
@@ -1155,10 +1157,12 @@ async function synchroniseerWachtrij() {
       wachtrij = leesWachtrij().filter((huidig) => huidig.id !== item.id);
       schrijfJsonOfGooi(OPSLAG.wachtrij, wachtrij);
     }
+    laatsteSyncFout = "";
     zetBasisSyncStatus("Alles gesynchroniseerd", "goed");
     elementen.resultaatStatus.textContent = "Gesynchroniseerd met workout-data.";
   } catch (fout) {
-    zetBasisSyncStatus(navigator.onLine ? "Sync mislukt · later opnieuw" : "Offline · later opnieuw", "fout");
+    laatsteSyncFout = navigator.onLine ? veiligeFoutmelding(fout) : "Offline · later opnieuw";
+    zetBasisSyncStatus(laatsteSyncFout, "fout");
     if (!elementen.resultaat.classList.contains("verborgen")) {
       elementen.resultaatStatus.textContent = "Lokaal veilig; synchronisatie volgt automatisch zodra het lukt.";
     }
@@ -1421,8 +1425,11 @@ function werkSyncStatusBij() {
     elementen.syncStatus.textContent = `Synchroniseren… ${aantal || ""}`.trim();
     elementen.syncStatus.dataset.soort = "";
   } else if (aantal > 0) {
-    elementen.syncStatus.textContent = `${aantal} sessie${aantal === 1 ? "" : "s"} wacht${aantal === 1 ? "" : "en"} op sync`;
-    elementen.syncStatus.dataset.soort = "wacht";
+    const wachttekst = `${aantal} sessie${aantal === 1 ? "" : "s"} wacht${aantal === 1 ? "" : "en"} op sync`;
+    // De wachtrij blijft staan als de upload mislukt; toon dan de reden erbij,
+    // anders lijkt een druk op de knop niets te doen.
+    elementen.syncStatus.textContent = laatsteSyncFout ? `${wachttekst} · ${laatsteSyncFout}` : wachttekst;
+    elementen.syncStatus.dataset.soort = laatsteSyncFout ? "fout" : "wacht";
   } else {
     elementen.syncStatus.textContent = basisSyncStatus.tekst;
     elementen.syncStatus.dataset.soort = basisSyncStatus.soort;
