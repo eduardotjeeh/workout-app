@@ -65,7 +65,31 @@ Oplossing: instelling **Bel mengen met podcast of muziek** (standaard uit, dus b
 
 Afruil, expliciet in de UI benoemd: `ambient` wordt door iOS gedempt zodra de zijschakelaar op stil staat, en biedt minder garantie met het scherm uit. Daarom een keuze en geen nieuwe standaard. Ontbreekt `navigator.audioSession` (< Safari 16.4, en Chromium), dan staat de schakelaar uit met uitleg.
 
-Getest op Chromium (API afwezig → schakelaar uitgeschakeld met melding) en met een gestubde `navigator.audioSession`: uit → `playback` + kaart "Rust 0:05", aan → `ambient` en geen kaart, omschakelen tijdens een rust van 60 s behield de resterende tijd en liet het element doorspelen, "Stop rust" ruimde blob-URL en timer op. Tikvlak 44 px, geen horizontale scroll op 375 px. **Nog te bevestigen in de sportschool:** of de bel in ambient-modus hoorbaar blijft met het scherm uit en de app op de achtergrond.
+Getest op Chromium (API afwezig → schakelaar uitgeschakeld met melding) en met een gestubde `navigator.audioSession`: uit → `playback` + kaart "Rust 0:05", aan → `ambient` en geen kaart, omschakelen tijdens een rust van 60 s behield de resterende tijd en liet het element doorspelen, "Stop rust" ruimde blob-URL en timer op. Tikvlak 44 px, geen horizontale scroll op 375 px. **Bevestigd in de sportschool op 2026-09-02: dat doet hij niet.** In ambient-modus met het scherm op slot hoort Eduard de bel niet. Opvolging in W13.
+
+## W13 — Bel hoorbaar met het scherm op slot én de podcast door (open, 2026-09-08)
+
+**De openstaande vraag uit W12 is beantwoord, en het antwoord is nee.** Eduard trainde op 02-09 met *Bel mengen met podcast of muziek* aan, luisterde een podcast en vergrendelde zijn telefoon: *"Ik hoor de bel niet als de app dicht is."* De `ambient`-categorie houdt de podcast dus wel intact, maar levert de bel niet af zodra de PWA naar de achtergrond gaat. Daarmee is de instelling in de praktijk geen keuze tussen twee werkende opties maar tussen twee halve: `playback` = bel wél, podcast niet; `ambient` = podcast wél, bel niet.
+
+Wat Eduard wil is allebei tegelijk: podcast door, telefoon op slot, bel hoorbaar.
+
+**Kandidaat: de andere `navigator.audioSession`-types.** De app kent er nu twee (`app.js`, `startRustAudio` → `zetAudioSessie(mengMetAndereAudio ? "ambient" : "playback")`), maar WebKit ondersteunt er meer, en twee daarvan zijn semantisch precies bedoeld voor een korte onderbreking bovenop lopende audio:
+
+- `"transient"` — **dempt** andere audio tijdelijk (ducking) en herstelt die daarna. Best case: de podcast loopt de hele rust zachtjes door en de bel komt er hoorbaar overheen, ook met het scherm uit.
+- `"transient-solo"` — **pauzeert** andere audio, die daarna automatisch hervat. Slechter dan ducking, maar nog altijd beter dan `playback`, waar niet is vastgelegd of de podcast uit zichzelf terugkomt.
+
+**Bekende beperking van de huidige opzet.** De WAV beslaat de héle rustperiode (W11: dat is precies waarom de bel met het scherm uit werkt — `setInterval` bevriest in de achtergrond, dus er is niets dat later een geluid kan starten). Een `transient`-sessie duurt daardoor ook de hele rust: de podcast zou 1,5–3 minuten gedempt blijven in plaats van alleen de 2,4 s van de bel. Of dat acceptabel is, moet Eduard horen. De sessiesoort halverwege omschakelen kan niet, om dezelfde reden dat er geen timer kan aftellen.
+
+**Testprotocol** (op de telefoon, want een gestubde `audioSession` zegt hier niets — het gaat om echt iOS-gedrag):
+
+1. Podcast starten, app openen, set afvinken met `type = "transient"`, telefoon vergrendelen. Klinkt de bel? Speelt de podcast door, en zo ja: gedempt of op volume?
+2. Idem met `"transient-solo"`.
+3. Beide ook met de zijschakelaar op stil (`ambient` faalt daar; de vraag is of transient dat ook doet).
+4. Controleren of de podcast na de bel op eigen kracht terugkomt.
+
+**Uitkomst → vorm.** Werkt `transient`, dan vervangt dat `ambient` als de "mengen"-stand en verdwijnt de afruil grotendeels. Werkt alleen `transient-solo`, dan wordt de instelling een keuze uit drie in plaats van twee. Werkt geen van beide, dan is de conclusie dat een iOS-PWA dit niet kan en blijft `playback` de aanbevolen stand — dat is vandaag ook het advies aan Eduard: schakelaar **uit**, bel gaat vóór podcast.
+
+Niet opnieuw onderzoeken: lokale notificaties, Web Push zonder server en Live Activities vielen in W11 al af.
 
 ## W6 — Later / ideeën
 
