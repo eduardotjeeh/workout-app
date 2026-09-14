@@ -72,12 +72,27 @@
       <p id="instellingen-melding" class="melding" aria-live="polite"></p>
 
       <h3 class="subkop">Geluid</h3>
-      <label class="keuzeblok" for="audio-mengen">
-        <input id="audio-mengen" type="checkbox">
-        <span>Bel mengen met podcast of muziek</span>
-      </label>
-      <p class="notitie">Uit: de bel is altijd hoorbaar, ook als de zijschakelaar op stil staat en met het scherm uit — maar iOS pauzeert je podcast zolang de rusttimer loopt. Aan: je podcast speelt gewoon door en de bel klinkt eroverheen, maar dan dempt de zijschakelaar (stil) ook de bel.</p>
-      <p id="audio-mengen-melding" class="melding" aria-live="polite"></p>
+      <fieldset id="audio-modus" class="keuzegroep">
+        <legend class="notitie">Rustbel naast een podcast of muziek</legend>
+        <label class="keuzeblok" for="audio-modus-playback">
+          <input id="audio-modus-playback" type="radio" name="audio-modus" value="playback" checked>
+          <span>Bel gaat vóór (podcast pauzeert de hele rust)</span>
+        </label>
+        <label class="keuzeblok" for="audio-modus-transient">
+          <input id="audio-modus-transient" type="radio" name="audio-modus" value="transient">
+          <span>Podcast zachter tijdens de rust, bel erbovenop</span>
+        </label>
+        <label class="keuzeblok" for="audio-modus-transient-solo">
+          <input id="audio-modus-transient-solo" type="radio" name="audio-modus" value="transient-solo">
+          <span>Podcast pauzeert en hervat vanzelf na de bel</span>
+        </label>
+        <label class="keuzeblok" for="audio-modus-ambient">
+          <input id="audio-modus-ambient" type="radio" name="audio-modus" value="ambient">
+          <span>Podcast door op volume, bel ertussen</span>
+        </label>
+      </fieldset>
+      <p class="notitie">De eerste stand is altijd hoorbaar, ook op stil en met het scherm op slot. De andere drie zijn de W13-test: de tweede en derde dempen of pauzeren de podcast voor de hele rust, niet alleen voor de bel; de laatste laat de podcast met rust maar heeft op slot de bel niet afgeleverd. Wisselen tijdens een rust gaat direct in.</p>
+      <p id="audio-modus-melding" class="melding" aria-live="polite"></p>
 
       <p class="app-versie">Workout <span id="app-versie"></span></p>
     </section>
