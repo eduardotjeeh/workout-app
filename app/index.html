@@ -92,6 +92,12 @@
         </label>
       </fieldset>
       <p class="notitie">De eerste stand is altijd hoorbaar, ook op stil en met het scherm op slot. De andere drie zijn de W13-test: de tweede en derde dempen of pauzeren de podcast voor de hele rust, niet alleen voor de bel; de laatste laat de podcast met rust maar heeft op slot de bel niet afgeleverd. Wisselen tijdens een rust gaat direct in.</p>
+      <label class="keuzeblok" for="audio-keten">
+        <input id="audio-keten" type="checkbox">
+        <span>Keten: na de bel podcast gepauzeerd houden tot de set is afgevinkt</span>
+      </label>
+      <p class="notitie">v0.10-test. Zodra de bel is afgelopen start de app een stille track die de podcast pauzeert; afvinken van de set stopt die en start de volgende rust, waarna de podcast hoort te hervatten. Combineer met de tweede stand (podcast zachter in de rust). De regel hieronder laat na afloop zien of de keten met het scherm op slot heeft gewerkt.</p>
+      <p id="audio-keten-diag" class="notitie" aria-live="polite"></p>
       <p id="audio-modus-melding" class="melding" aria-live="polite"></p>
 
       <p class="app-versie">Workout <span id="app-versie"></span></p>

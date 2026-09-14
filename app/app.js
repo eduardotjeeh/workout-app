@@ -4,6 +4,7 @@
 const OPSLAG = {
   instellingen: "workout-instellingen-v1",
   geluid: "workout-geluid-v1",
+  ketenDiag: "workout-keten-diag-v1",
   planCache: "workout-plan-cache-v1",
   concept: "workout-actieve-sessie-v1",
   wachtrij: "workout-sync-wachtrij-v1",
@@ -49,6 +50,8 @@ const elementen = {
   instellingenMelding: document.getElementById("instellingen-melding"),
   audioModus: document.getElementById("audio-modus"),
   audioModusMelding: document.getElementById("audio-modus-melding"),
+  audioKeten: document.getElementById("audio-keten"),
+  audioKetenDiag: document.getElementById("audio-keten-diag"),
   appVersie: document.getElementById("app-versie"),
   nieuwPlan: document.getElementById("nieuw-plan"),
   dashboard: document.getElementById("dashboard"),
@@ -102,6 +105,7 @@ function stelGebeurtenissenIn() {
   });
   document.getElementById("instellingen-opslaan").addEventListener("click", slaInstellingenOp);
   elementen.audioModus.addEventListener("change", slaGeluidsinstellingOp);
+  elementen.audioKeten.addEventListener("change", slaGeluidsinstellingOp);
   document.getElementById("verbinding-testen").addEventListener("click", testVerbinding);
   document.getElementById("resultaat-sync").addEventListener("click", synchroniseerWachtrij);
   document.getElementById("nieuwe-sessie").addEventListener("click", startNieuweSessie);
@@ -818,6 +822,20 @@ let rustAudioActief = false;
 const AUDIO_MODI = ["playback", "transient", "transient-solo", "ambient"];
 let audioModus = "playback";
 
+// De keten (W13-test, v0.10): Eduard wil de podcast tijdens de rust horen en
+// tijdens de set níet — het spiegelbeeld van wat de rust-WAV vanzelf doet.
+// Daarom start de app, zodra de rust-WAV (stilte + bel) is afgelopen, een
+// tweede, stille en herhalende track onder "transient-solo": die houdt de
+// podcast gepauzeerd tot de volgende set is afgevinkt (stopRustAudio), waarna
+// iOS de podcast hoort te hervatten. Of de ended-handler met het scherm op
+// slot nog draait en play() daar zonder tik wordt toegestaan, is precies wat
+// deze build moet uitwijzen; daarom schrijft hij een diagnose naar localStorage
+// die het instellingenscherm toont.
+const KETEN_SET_SESSIE = "transient-solo";
+let ketenActief = false;
+let ketenFase = null; // null | "rust" | "set"
+let stilteUrl = null;
+
 // navigator.audioSession bestaat op Safari 16.4+; elders is er niets te kiezen
 // en houdt de browser zijn eigen gedrag aan.
 function audioSessieBeschikbaar() {
@@ -849,9 +867,13 @@ function audioModusKnoppen() {
 
 function vulGeluidsformulier() {
   audioModus = leesAudioModus();
+  ketenActief = leesJson(OPSLAG.geluid)?.keten === true;
   audioModusKnoppen().forEach((knop) => { knop.checked = knop.value === audioModus; });
+  elementen.audioKeten.checked = ketenActief;
+  toonKetenDiag();
   if (!audioSessieBeschikbaar()) {
     audioModusKnoppen().forEach((knop) => { knop.disabled = true; });
+    elementen.audioKeten.disabled = true;
     elementen.audioModusMelding.className = "melding";
     elementen.audioModusMelding.textContent =
       "Deze browser kan de audiosessie niet instellen; de bel gedraagt zich hier zoals de browser bepaalt.";
@@ -868,17 +890,20 @@ const AUDIO_MODUS_UITLEG = {
 function slaGeluidsinstellingOp() {
   const gekozen = audioModusKnoppen().find((knop) => knop.checked)?.value;
   audioModus = AUDIO_MODI.includes(gekozen) ? gekozen : "playback";
-  const bewaard = schrijfJson(OPSLAG.geluid, { modus: audioModus });
+  ketenActief = elementen.audioKeten.checked;
+  const bewaard = schrijfJson(OPSLAG.geluid, { modus: audioModus, keten: ketenActief });
   elementen.audioModusMelding.className = bewaard ? "melding goed" : "melding fout";
   elementen.audioModusMelding.textContent = bewaard
-    ? AUDIO_MODUS_UITLEG[audioModus]
+    ? AUDIO_MODUS_UITLEG[audioModus] + (ketenActief ? " Na de bel blijft de podcast gepauzeerd tot je de set afvinkt." : "")
     : "Instelling lokaal opslaan is mislukt.";
   // Een lopende rust draait nog op de oude sessiesoort. Deze change komt uit
   // een tik op de schakelaar, dus opnieuw starten mag: zo gaat de keuze direct
   // in en hoeft er niet eerst een set afgevinkt te worden.
   if (timerEinde) {
     const resterend = Math.max(0, (timerEinde - Date.now()) / 1000);
-    if (!startRustAudio(resterend)) stopRustAudio();
+    // Na de bel (resterend 0) zou opnieuw starten de bel nog eens laten
+    // klinken; dan alleen de lopende audio (bijv. de ketenstilte) stoppen.
+    if (resterend <= 0 || !startRustAudio(resterend)) stopRustAudio();
   }
 }
 
@@ -948,6 +973,10 @@ function startRustAudio(seconden) {
   try {
     zetAudioSessie(audioModus);
     rustAudioUrl = URL.createObjectURL(maakRustWavBlob(seconden));
+    audio.loop = false;
+    audio.onended = ketenActief ? ketenNaBel : null;
+    ketenFase = ketenActief ? "rust" : null;
+    if (ketenActief) schrijfKetenDiag({ rustGestart: nu(), belEinde: null, verborgen: null, stilteGestart: null, stilteGestopt: null, fout: null });
     audio.src = rustAudioUrl;
     const belofte = audio.play();
     if (belofte && belofte.catch) belofte.catch(() => { rustAudioActief = false; });
@@ -969,11 +998,113 @@ function rustAudioLoopt() {
   return Boolean(rustAudioActief && audio && !audio.paused && !audio.ended && !audio.error);
 }
 
+// Tweede schakel van de keten: draait in de ended-handler van de rust-WAV,
+// dus mogelijk met het scherm op slot en zonder user gesture.
+function ketenNaBel() {
+  const audio = elementen.rustAudio;
+  if (!rustAudioActief || ketenFase !== "rust" || !audio) return;
+  ketenFase = "set";
+  const diag = { belEinde: nu(), verborgen: document.visibilityState === "hidden" };
+  try {
+    zetAudioSessie(KETEN_SET_SESSIE);
+    if (stilteUrl) URL.revokeObjectURL(stilteUrl);
+    stilteUrl = URL.createObjectURL(maakStilteWavBlob(2));
+    audio.onended = null;
+    audio.loop = true;
+    audio.src = stilteUrl;
+    const belofte = audio.play();
+    if (belofte && belofte.then) {
+      belofte
+        .then(() => schrijfKetenDiag({ ...diag, stilteGestart: nu() }))
+        .catch((fout) => {
+          rustAudioActief = false;
+          schrijfKetenDiag({ ...diag, stilteGestart: false, fout: veiligeFoutmelding(fout) });
+        });
+    } else {
+      schrijfKetenDiag({ ...diag, stilteGestart: nu() });
+    }
+    zetMediaSessie(null, "Set bezig — afvinken hervat de podcast");
+    if (timerEinde) elementen.timer.querySelector(".timer-label").textContent = "Set bezig · podcast gepauzeerd";
+  } catch (fout) {
+    rustAudioActief = false;
+    schrijfKetenDiag({ ...diag, stilteGestart: false, fout: veiligeFoutmelding(fout) });
+  }
+}
+
+// Stille WAV, 8 kHz 8-bit mono: 2 s = 16 KB, en loop=true laat de media-
+// engine hem herhalen zonder dat er JavaScript aan te pas komt.
+function maakStilteWavBlob(seconden) {
+  const rate = 8000;
+  const totaal = Math.round(seconden * rate);
+  const buffer = new ArrayBuffer(44 + totaal);
+  const dv = new DataView(buffer);
+  const tekst = (positie, waarde) => {
+    for (let i = 0; i < waarde.length; i += 1) dv.setUint8(positie + i, waarde.charCodeAt(i));
+  };
+  tekst(0, "RIFF");
+  dv.setUint32(4, 36 + totaal, true);
+  tekst(8, "WAVE");
+  tekst(12, "fmt ");
+  dv.setUint32(16, 16, true);
+  dv.setUint16(20, 1, true); // PCM
+  dv.setUint16(22, 1, true); // mono
+  dv.setUint32(24, rate, true);
+  dv.setUint32(28, rate, true);
+  dv.setUint16(32, 1, true);
+  dv.setUint16(34, 8, true);
+  tekst(36, "data");
+  dv.setUint32(40, totaal, true);
+  new Uint8Array(buffer, 44).fill(128); // 8-bit PCM: 128 is stilte
+  return new Blob([buffer], { type: "audio/wav" });
+}
+
+function nu() {
+  return new Date().toLocaleTimeString("nl-NL", { hour12: false });
+}
+
+function schrijfKetenDiag(deel) {
+  const huidig = leesJson(OPSLAG.ketenDiag) || {};
+  let vorige = Array.isArray(huidig.vorige) ? huidig.vorige : [];
+  if (deel.rustGestart && huidig.rustGestart) {
+    // Nieuwe keten: de vorige als één regel archiveren (laatste 5 bewaren).
+    vorige = [samenvatKeten(huidig), ...vorige].slice(0, 5);
+  }
+  schrijfJson(OPSLAG.ketenDiag, { ...huidig, ...deel, vorige });
+  toonKetenDiag();
+}
+
+function samenvatKeten(d) {
+  if (!d.belEinde) return `${d.rustGestart}: handler niet gedraaid`;
+  const plek = d.verborgen ? "achtergrond" : "in beeld";
+  if (d.stilteGestart) return `${d.rustGestart}: gelukt (${plek}${d.stilteGestopt ? `, gestopt ${d.stilteGestopt}` : ""})`;
+  if (d.stilteGestart === false) return `${d.rustGestart}: stilte geweigerd (${plek}): ${d.fout || "onbekend"}`;
+  return `${d.rustGestart}: bel afgelopen (${plek}), stilte zonder antwoord`;
+}
+
+function toonKetenDiag() {
+  const d = leesJson(OPSLAG.ketenDiag);
+  const el = elementen.audioKetenDiag;
+  if (!el) return;
+  if (!d || !d.rustGestart) { el.textContent = ""; return; }
+  const regels = [`Laatste keten: rust gestart ${d.rustGestart}`];
+  regels.push(d.belEinde ? `bel afgelopen ${d.belEinde}${d.verborgen ? " (app in achtergrond)" : " (app in beeld)"}` : "bel nog niet afgelopen of handler niet gedraaid");
+  if (d.belEinde) {
+    regels.push(d.stilteGestart ? `stilte gestart ${d.stilteGestart}` : (d.stilteGestart === false ? `stilte geweigerd: ${d.fout || "onbekend"}` : "stilte: nog geen antwoord"));
+  }
+  if (d.stilteGestopt) regels.push(`gestopt ${d.stilteGestopt}`);
+  const vorige = Array.isArray(d.vorige) && d.vorige.length ? ` — eerder: ${d.vorige.join(" | ")}` : "";
+  el.textContent = regels.join(" · ") + vorige;
+}
+
 function stopRustAudio() {
+  if (ketenFase === "set" && rustAudioActief) schrijfKetenDiag({ stilteGestopt: nu() });
+  ketenFase = null;
   rustAudioActief = false;
   const audio = elementen.rustAudio;
   if (audio) {
     try {
+      audio.onended = null;
+      audio.loop = false;
       audio.pause();
       audio.removeAttribute("src");
       audio.load();
@@ -982,6 +1113,10 @@ function stopRustAudio() {
   if (rustAudioUrl) {
     URL.revokeObjectURL(rustAudioUrl);
     rustAudioUrl = null;
+  }
+  if (stilteUrl) {
+    URL.revokeObjectURL(stilteUrl);
+    stilteUrl = null;
   }
   if ("mediaSession" in navigator) {
     try {
@@ -994,11 +1129,11 @@ function stopRustAudio() {
 // Zet de Now Playing-kaart op het vergrendelscherm. Een aftellende teller kan
 // een PWA daar niet tonen, maar de voortgangsbalk van dit fragment ís de
 // rusttimer, en pauzeren komt neer op de rust afbreken.
-function zetMediaSessie(seconden) {
+function zetMediaSessie(seconden, titel) {
   if (!("mediaSession" in navigator)) return;
   try {
     navigator.mediaSession.metadata = new MediaMetadata({
-      title: `Rust ${formatteerTijd(seconden)}`,
+      title: titel || `Rust ${formatteerTijd(seconden)}`,
       artist: plan?.naam || "Workout",
       album: "Workout",
       artwork: [
