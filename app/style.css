@@ -68,6 +68,28 @@ h2 { font-size: 1.15rem; }
 }
 
 main { padding: 0.75rem 1rem 5.5rem; }
+
+/* Uitleg bij een plan of oefening: ingeklapt, één tik om te lezen. */
+.toelichting {
+  margin-top: 0.3rem;
+  color: var(--gedempt);
+  font-size: 0.85rem;
+  line-height: 1.35;
+}
+
+.toelichting summary {
+  display: inline-block;
+  min-height: 2rem;
+  line-height: 2rem;
+  cursor: pointer;
+  color: var(--accent);
+  list-style: none;
+}
+
+.toelichting summary::-webkit-details-marker { display: none; }
+.toelichting summary::before { content: "▸ "; }
+.toelichting[open] summary::before { content: "▾ "; }
+.toelichting p { margin: 0 0 0.25rem; white-space: pre-line; }
 main.timer-actief { padding-bottom: 10rem; }
 
 .icoonknop {

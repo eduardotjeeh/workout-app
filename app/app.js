@@ -31,6 +31,7 @@ let laatsteSyncFout = "";
 const elementen = {
   planNaam: document.getElementById("plan-naam"),
   planNotitie: document.getElementById("plan-notitie"),
+  planToelichting: document.getElementById("plan-toelichting"),
   oefeningen: document.getElementById("oefeningen"),
   logscherm: document.getElementById("logscherm"),
   resultaat: document.getElementById("resultaat"),
@@ -235,6 +236,7 @@ function maakWerkplan(ruwPlan) {
     gepland_op: ruwPlan.gepland_op,
     naam: ruwPlan.naam,
     notitie: ruwPlan.notitie ?? "",
+    toelichting: typeof ruwPlan.toelichting === "string" ? ruwPlan.toelichting : "",
     warming_up: Array.isArray(ruwPlan.warming_up)
       ? ruwPlan.warming_up
           .filter((item) => typeof item?.tekst === "string" && item.tekst.trim())
@@ -246,6 +248,7 @@ function maakWerkplan(ruwPlan) {
       stap_kg: oefening.stap_kg === "dumbbell" ? "dumbbell"
         : (Number.isFinite(oefening.stap_kg) && oefening.stap_kg > 0 ? oefening.stap_kg : 2.5),
       notitie: oefening.notitie ?? "",
+      toelichting: typeof oefening.toelichting === "string" ? oefening.toelichting : "",
       extra: false,
       opwarm_sets: Array.isArray(oefening.opwarm_sets)
         ? oefening.opwarm_sets
@@ -271,8 +274,38 @@ function isGeldigConcept(concept) {
 
 function toonPlan() {
   elementen.planNaam.textContent = plan.naam;
-  elementen.planNotitie.textContent = plan.notitie || `Plan van ${plan.gepland_op}`;
+  const { kort, lang } = splitsNotitie(plan.notitie, plan.toelichting);
+  elementen.planNotitie.textContent = kort || `Plan van ${plan.gepland_op}`;
+  elementen.planToelichting.replaceChildren();
+  if (lang) elementen.planToelichting.appendChild(maakToelichting(lang));
   renderOefeningen();
+}
+
+// Notities in de app zijn cue-regels voor in de sportschool; de uitleg
+// ("waarom") hoort in `toelichting` en blijft ingeklapt. Als vangnet knipt de
+// app een te lange notitie zelf af en schuift de rest bij de toelichting.
+const NOTITIE_MAX = 120;
+
+function splitsNotitie(notitie, toelichting) {
+  const tekst = (notitie || "").trim();
+  const uitleg = (toelichting || "").trim();
+  if (tekst.length <= NOTITIE_MAX) return { kort: tekst, lang: uitleg };
+  let knip = tekst.lastIndexOf(" ", NOTITIE_MAX);
+  if (knip < NOTITIE_MAX * 0.6) knip = NOTITIE_MAX;
+  const kort = `${tekst.slice(0, knip).replace(/[\s,;:—-]+$/, "")}…`;
+  return { kort, lang: uitleg ? `${tekst}\n\n${uitleg}` : tekst };
+}
+
+function maakToelichting(tekst) {
+  const details = document.createElement("details");
+  details.className = "toelichting";
+  const summary = document.createElement("summary");
+  summary.textContent = "Waarom";
+  details.appendChild(summary);
+  const p = document.createElement("p");
+  p.textContent = tekst;
+  details.appendChild(p);
+  return details;
 }
 
 function renderOefeningen() {
@@ -340,12 +373,14 @@ function renderOefeningen() {
 
     if (oefening.menuOpen) kaart.appendChild(maakOefeningMenu(oefening, oefeningIndex));
 
-    if (oefening.notitie) {
+    const { kort: notitieKort, lang: notitieLang } = splitsNotitie(oefening.notitie, oefening.toelichting);
+    if (notitieKort) {
       const notitie = document.createElement("p");
       notitie.className = "notitie";
-      notitie.textContent = oefening.notitie;
+      notitie.textContent = notitieKort;
       kaart.appendChild(notitie);
     }
+    if (notitieLang) kaart.appendChild(maakToelichting(notitieLang));
 
     if (oefening.extra) {
       const rustLabel = document.createElement("label");

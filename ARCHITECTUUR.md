@@ -37,6 +37,7 @@ Naast plan en sessies publiceert de hub ook `dashboard.html` (zelfstandig HTML-b
       "rust_sec": 150,
       "stap_kg": 2.5,
       "notitie": "Diepte boven alles",
+      "toelichting": "Vorige keer werd de laatste set ondiep; liever een rep minder dan ondieper.",
       "sets": [
         { "kg": 60, "reps": 5 },
         { "kg": 60, "reps": 5 },
@@ -46,6 +47,8 @@ Naast plan en sessies publiceert de hub ook `dashboard.html` (zelfstandig HTML-b
   ]
 }
 ```
+
+`notitie` (plan-niveau en per oefening) is een **cue-regel voor in de sportschool**: wat Eduard moet dóén of instellen — penstand of schijven, afstelling, één vormcue, wat te schrappen bij uitloop. Richtlijn: per oefening hooguit ~90 tekens, plan-niveau hooguit ~120; nooit uitleg, geschiedenis of onderbouwing. Die horen in het optionele veld `toelichting` (zelfde niveaus, vrije lengte): de app toont dat ingeklapt achter "Waarom" en Eduard leest het alleen als hij wil. Als vangnet knipt de app een notitie langer dan 120 tekens zelf af en zet de volledige tekst bij de toelichting — maar dat is een noodrem, geen werkwijze. `toelichting` komt niet terug in het sessie-JSON.
 
 `stap_kg` (optioneel, standaard 2,5) is de kleinste gewichtsstap van de machine/oefening; de plus/min-knoppen in de app stappen hiermee. Afspraken: schijfoefeningen 2,5; machines en kabels krijgen de werkelijke stap van hun stapel (in Eduards sportschool 2,3 voor de 15 lbs-stapel en 1,1 voor de 10 lbs-stapel — zie `Gezondheid/data/training/schema.md` §Gewichtsstappen). Speciale waarde: de tekst `"dumbbell"` — de app stapt dan 1 kg t/m 10 kg en daarboven 2 kg (het dumbbellrek).
 

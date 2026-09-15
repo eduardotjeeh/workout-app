@@ -112,6 +112,13 @@ Uitkomst → vorm: werkt 2 op slot én op stil, dan wordt `transient` de basis v
 
 Niet opnieuw onderzoeken: lokale notificaties, Web Push zonder server en Live Activities vielen in W11 al af.
 
+## W14 — Notities in de app zijn cue-regels, uitleg gaat achter "Waarom" ✅ (2026-09-15, Fable, v0.10.1)
+
+Eduard over het plan van 2026-09-15: de bijschriften in de app zijn veel te uitbundig; tijdens de training leest hij die nooit, juist omdat hij zijn tijd optimaliseert. Meting: per oefening 376–761 tekens `notitie`, plan-niveau ruim 1000 — de hub schreef zijn hele onderbouwing (geschiedenis, RPE-verloop, overload-regels) in het veld dat de app altijd toont. Drie ingrepen:
+- **Contract:** `notitie` is een cue-regel (per oefening ~90 tekens, plan ~120): penstand/schijven, afstelling, één vormcue, schrapvolgorde. Nieuw optioneel veld `toelichting` voor de onderbouwing; komt niet terug in het sessie-JSON.
+- **App:** toont `toelichting` ingeklapt achter "▸ Waarom" (`<details>`, tikvlak 2 rem). Vangnet: een `notitie` langer dan 120 tekens wordt op een woordgrens afgeknipt met "…" en de volledige tekst schuift bij de toelichting — een te lange notitie kan de kaart dus nooit meer volzetten.
+- **Hub:** `Gezondheid/prompts/app-plan.md` krijgt de lengtegrens als harde regel plus de verdeling notitie/toelichting/daglog. Het plan van 2026-09-15 is direct herschreven naar het nieuwe patroon zodat de avondtraining er al van profiteert.
+
 ## W6 — Later / ideeën
 
 - Plate calculator (welke schijven op de stang).
