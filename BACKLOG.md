@@ -67,7 +67,9 @@ Afruil, expliciet in de UI benoemd: `ambient` wordt door iOS gedempt zodra de zi
 
 Getest op Chromium (API afwezig → schakelaar uitgeschakeld met melding) en met een gestubde `navigator.audioSession`: uit → `playback` + kaart "Rust 0:05", aan → `ambient` en geen kaart, omschakelen tijdens een rust van 60 s behield de resterende tijd en liet het element doorspelen, "Stop rust" ruimde blob-URL en timer op. Tikvlak 44 px, geen horizontale scroll op 375 px. **Bevestigd in de sportschool op 2026-09-02: dat doet hij niet.** In ambient-modus met het scherm op slot hoort Eduard de bel niet. Opvolging in W13.
 
-## W13 — Bel hoorbaar met het scherm op slot én de podcast door (getest 2026-09-15 en 2026-09-17: geen enkele audiosessie-soort werkt op slot behalve `playback`)
+## W13 — Bel hoorbaar met het scherm op slot én de podcast door ✅ afgesloten (opgelost in W14 hieronder)
+
+> Uitkomst: geen enkele audiosessie-soort levert de bel af op slot behalve `playback`. Het antwoord kwam uiteindelijk van buiten de audiosessie, via Web Push — zie W14. De rest van dit hoofdstuk is het onderzoeksspoor dat daarheen leidde.
 
 **Uitkomst (Eduard, tests op 2026-09-15 en 2026-09-17):** met het scherm op slot komt de bel alleen door onder `playback` — de stand die de podcast de hele rust pauzeert. `transient`, `transient-solo` en `ambient` leveren de bel op slot niet af, en de keten lost dat niet op (die start pas ná een bel die niet komt). Conclusie uit het protocol hieronder ("werkt geen van beide op slot"): een iOS-PWA kan via `navigator.audioSession` niet tegelijk de podcast laten spelen én de bel op slot afleveren. `playback` blijft de aanbevolen stand; de drie andere standen en de keten kunnen uit de UI (terugsnoeien).
 
@@ -85,7 +87,16 @@ Gekozen route uit de drie opvolgkandidaten: **Web Push met een eigen Cloudflare 
 
 **Getest.** `npm test` in `push-worker/`: de versleuteling komt byte voor byte uit op de testvector van RFC 8291 §5, en een nagebootste Workers-runtime draait de echte `worker.js` langs routering, sleutelcontrole, alarm, herplannen, annuleren en opruimen na een 410 — de verstuurde melding wordt daarna met `node:crypto` ontcijferd zoals de telefoon dat zou doen (24 controles). In de browser: afvinken stuurt één `/plan` met de juiste rusttijd en laat het media-element ongemoeid, "+30 s" herplant, "Stop rust" annuleert, twee sets achter elkaar geven twee `/plan` en geen inhalende `/annuleer`, en midden in de rust van stand wisselen werkt beide kanten op. Zonder netwerk meldt de timerbalk "melding niet gepland". 375 px zonder horizontale scroll, tikvlak 44 px.
 
-**Wat nog moet:** de Worker deployen (`push-worker/README.md`) en op de telefoon testen. **Zet daarbij de belschakelaar niet op stil** — meldingsgeluiden volgen die schakelaar, en dat is nu net het verschil met de `playback`-stand.
+**Uitkomst (Eduard, 2026-09-21): hij werkt.** Podcast speelt door, telefoon op slot, melding komt aan het eind van de rust binnen. Daarmee is de vraag uit W12 en W13 eindelijk beantwoord.
+
+**Teruggesnoeid in v0.12.0.** Nu de uitkomst bekend is, zijn de standen `transient`, `transient-solo` en `ambient` weg, plus het keten-vinkje, `ketenNaBel`, `maakStilteWavBlob`, de diagnose-functies en de sleutel `workout-keten-diag-v1` (de app ruimt die bij het openen op). Er blijven twee standen over, met een duidelijke afruil tussen de twee:
+
+| Stand | Bel op slot | Podcast | Zwakke plek |
+| --- | --- | --- | --- |
+| Bel gaat vóór (`playback`) | altijd, ook op stil | pauzeert de hele rust | geen podcast tijdens de rust |
+| Melding op slot (`push`) | ja | speelt door | volgt de belschakelaar; bereik nodig bij het afvinken |
+
+Een bewaarde keuze voor een geschrapte stand valt terug op `playback`; getest met `{"modus":"transient-solo","keten":true}` in localStorage. Beide resterende standen zijn daarna opnieuw nagelopen: `playback` start het media-element en stuurt niets, `push` laat het media-element met rust en stuurt één `/plan`, "+30 s" herplant en "Stop rust" annuleert.
 
 **Bekende grenzen van deze route:** het standaard meldingsgeluid van iOS in plaats van de boksbel, bereik nodig op het moment van afvinken, en een Focus-stand die meldingen onderdrukt onderdrukt ook deze. De melding komt via het alarm plus de pushdienst een tel of twee later dan de seconde zelf.
 

@@ -79,30 +79,12 @@
           <input id="audio-modus-playback" type="radio" name="audio-modus" value="playback" checked>
           <span>Bel gaat vóór (podcast pauzeert de hele rust)</span>
         </label>
-        <label class="keuzeblok" for="audio-modus-transient">
-          <input id="audio-modus-transient" type="radio" name="audio-modus" value="transient">
-          <span>Podcast zachter tijdens de rust, bel erbovenop</span>
-        </label>
-        <label class="keuzeblok" for="audio-modus-transient-solo">
-          <input id="audio-modus-transient-solo" type="radio" name="audio-modus" value="transient-solo">
-          <span>Podcast pauzeert en hervat vanzelf na de bel</span>
-        </label>
-        <label class="keuzeblok" for="audio-modus-ambient">
-          <input id="audio-modus-ambient" type="radio" name="audio-modus" value="ambient">
-          <span>Podcast door op volume, bel ertussen</span>
-        </label>
         <label class="keuzeblok" for="audio-modus-push">
           <input id="audio-modus-push" type="radio" name="audio-modus" value="push">
           <span>Melding op het slotscherm, podcast speelt door</span>
         </label>
       </fieldset>
-      <p class="notitie">De eerste stand is altijd hoorbaar, ook op stil en met het scherm op slot, maar pauzeert de podcast de hele rust. Stand twee tot en met vier lieten de bel op slot niet doorkomen (getest 15 en 17 september). De vijfde stand speelt zelf geen audio maar laat de Worker een melding sturen: dan blijft de podcast lopen. Zet die hieronder eerst op. Wisselen tijdens een rust gaat direct in.</p>
-      <label class="keuzeblok" for="audio-keten">
-        <input id="audio-keten" type="checkbox">
-        <span>Keten: na de bel podcast gepauzeerd houden tot de set is afgevinkt</span>
-      </label>
-      <p class="notitie">v0.10-test, inmiddels afgeschreven: de diagnose hieronder meldde bij elke poging "handler niet gedraaid" — met het scherm op slot draait de <code>ended</code>-handler niet.</p>
-      <p id="audio-keten-diag" class="notitie" aria-live="polite"></p>
+      <p class="notitie">De bel is altijd hoorbaar, ook op stil en met het scherm op slot, maar pauzeert de podcast de hele rust. De melding doet het omgekeerde: de app speelt zelf niets, dus de podcast loopt door, maar hij volgt wel de belschakelaar van de telefoon. Zet de melding hieronder eerst op. Wisselen tijdens een rust gaat direct in.</p>
       <p id="audio-modus-melding" class="melding" aria-live="polite"></p>
 
       <h3 class="subkop">Melding op slot</h3>
