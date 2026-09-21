@@ -91,15 +91,36 @@
           <input id="audio-modus-ambient" type="radio" name="audio-modus" value="ambient">
           <span>Podcast door op volume, bel ertussen</span>
         </label>
+        <label class="keuzeblok" for="audio-modus-push">
+          <input id="audio-modus-push" type="radio" name="audio-modus" value="push">
+          <span>Melding op het slotscherm, podcast speelt door</span>
+        </label>
       </fieldset>
-      <p class="notitie">De eerste stand is altijd hoorbaar, ook op stil en met het scherm op slot. De andere drie zijn de W13-test: de tweede en derde dempen of pauzeren de podcast voor de hele rust, niet alleen voor de bel; de laatste laat de podcast met rust maar heeft op slot de bel niet afgeleverd. Wisselen tijdens een rust gaat direct in.</p>
+      <p class="notitie">De eerste stand is altijd hoorbaar, ook op stil en met het scherm op slot, maar pauzeert de podcast de hele rust. Stand twee tot en met vier lieten de bel op slot niet doorkomen (getest 15 en 17 september). De vijfde stand speelt zelf geen audio maar laat de Worker een melding sturen: dan blijft de podcast lopen. Zet die hieronder eerst op. Wisselen tijdens een rust gaat direct in.</p>
       <label class="keuzeblok" for="audio-keten">
         <input id="audio-keten" type="checkbox">
         <span>Keten: na de bel podcast gepauzeerd houden tot de set is afgevinkt</span>
       </label>
-      <p class="notitie">v0.10-test. Zodra de bel is afgelopen start de app een stille track die de podcast pauzeert; afvinken van de set stopt die en start de volgende rust, waarna de podcast hoort te hervatten. Combineer met de tweede stand (podcast zachter in de rust). De regel hieronder laat na afloop zien of de keten met het scherm op slot heeft gewerkt.</p>
+      <p class="notitie">v0.10-test, inmiddels afgeschreven: de diagnose hieronder meldde bij elke poging "handler niet gedraaid" — met het scherm op slot draait de <code>ended</code>-handler niet.</p>
       <p id="audio-keten-diag" class="notitie" aria-live="polite"></p>
       <p id="audio-modus-melding" class="melding" aria-live="polite"></p>
+
+      <h3 class="subkop">Melding op slot</h3>
+      <p class="notitie">De bel als pushmelding, verstuurd door een eigen Cloudflare Worker. Die heeft geen audiosessie nodig, dus de podcast speelt door. Opzetten staat in <code>push-worker/README.md</code>. <strong>Let op:</strong> zet de belschakelaar van de telefoon niet op stil — meldingsgeluiden volgen die schakelaar.</p>
+      <label class="veldblok" for="push-url">
+        <span>Worker-URL</span>
+        <input id="push-url" type="url" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="https://workout-bel.…workers.dev">
+      </label>
+      <label class="veldblok" for="push-sleutel">
+        <span>App-sleutel</span>
+        <input id="push-sleutel" type="password" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="gedeeld geheim">
+      </label>
+      <div class="knoppenrij">
+        <button id="push-opslaan" type="button" class="secundair">Opslaan</button>
+        <button id="push-aanzetten" type="button" class="primair compact">Meldingen aanzetten</button>
+      </div>
+      <button id="push-test" type="button" class="secundair breed">Testmelding sturen</button>
+      <p id="push-melding" class="melding" aria-live="polite"></p>
 
       <p class="app-versie">Workout <span id="app-versie"></span></p>
     </section>

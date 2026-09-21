@@ -4,6 +4,7 @@
 const OPSLAG = {
   instellingen: "workout-instellingen-v1",
   geluid: "workout-geluid-v1",
+  push: "workout-push-v1",
   ketenDiag: "workout-keten-diag-v1",
   planCache: "workout-plan-cache-v1",
   concept: "workout-actieve-sessie-v1",
@@ -53,6 +54,9 @@ const elementen = {
   audioModusMelding: document.getElementById("audio-modus-melding"),
   audioKeten: document.getElementById("audio-keten"),
   audioKetenDiag: document.getElementById("audio-keten-diag"),
+  pushUrl: document.getElementById("push-url"),
+  pushSleutel: document.getElementById("push-sleutel"),
+  pushMelding: document.getElementById("push-melding"),
   appVersie: document.getElementById("app-versie"),
   nieuwPlan: document.getElementById("nieuw-plan"),
   dashboard: document.getElementById("dashboard"),
@@ -68,6 +72,8 @@ async function init() {
   vraagWakeLock();
   vulInstellingenformulier();
   vulGeluidsformulier();
+  vulPushFormulier();
+  controleerPushAbonnement();
   werkSyncStatusBij();
   await laadStartplan();
   await synchroniseerWachtrij();
@@ -107,6 +113,9 @@ function stelGebeurtenissenIn() {
   document.getElementById("instellingen-opslaan").addEventListener("click", slaInstellingenOp);
   elementen.audioModus.addEventListener("change", slaGeluidsinstellingOp);
   elementen.audioKeten.addEventListener("change", slaGeluidsinstellingOp);
+  document.getElementById("push-opslaan").addEventListener("click", slaPushInstellingenOp);
+  document.getElementById("push-aanzetten").addEventListener("click", zetMeldingenAan);
+  document.getElementById("push-test").addEventListener("click", stuurTestmelding);
   document.getElementById("verbinding-testen").addEventListener("click", testVerbinding);
   document.getElementById("resultaat-sync").addEventListener("click", synchroniseerWachtrij);
   document.getElementById("nieuwe-sessie").addEventListener("click", startNieuweSessie);
@@ -656,18 +665,32 @@ function formatteerTijd(seconden) {
   return `${Math.floor(seconden / 60)}:${String(seconden % 60).padStart(2, "0")}`;
 }
 
+// Bij een volgende set loopt startTimer eerst stopTimer; zonder deze vlag zou
+// het annuleer-verzoek het nieuwe plan-verzoek kunnen inhalen en de bel wissen.
+let pushHerplannen = false;
+
 function startTimer(seconden) {
+  pushHerplannen = true;
   stopTimer();
+  pushHerplannen = false;
   timerEinde = Date.now() + seconden * 1000;
   elementen.timer.classList.remove("verborgen");
   document.querySelector("main").classList.add("timer-actief");
   elementen.timer.querySelector(".timer-label").textContent = "Rust";
   werkTimerBij();
   timerInterval = window.setInterval(werkTimerBij, 250);
-  // Deze aanroep zit nog in de tik waarmee de set is afgevinkt; iOS staat
-  // afspelen alleen binnen zo'n gebaar toe. Lukt het niet, dan valt de bel
-  // terug op Web Audio en is de keep-alive weer nodig.
-  if (!startRustAudio(seconden)) startAudioKeepAlive();
+  if (audioModus === "push") {
+    // Geen media-element: dat is precies wat de podcast zou pauzeren. De
+    // keep-alive houdt Web Audio wakker zodat de boksbel alsnog klinkt zolang
+    // de app in beeld blijft; op slot doet de melding het werk.
+    startAudioKeepAlive();
+    planPushBel(seconden);
+  } else if (!startRustAudio(seconden)) {
+    // Deze aanroep zit nog in de tik waarmee de set is afgevinkt; iOS staat
+    // afspelen alleen binnen zo'n gebaar toe. Lukt het niet, dan valt de bel
+    // terug op Web Audio en is de keep-alive weer nodig.
+    startAudioKeepAlive();
+  }
 }
 
 function werkTimerBij() {
@@ -691,7 +714,8 @@ function verlengTimer(seconden) {
   if (!timerInterval) timerInterval = window.setInterval(werkTimerBij, 250);
   werkTimerBij();
   // Ook dit is een knoptik, dus opnieuw starten mag.
-  if (!startRustAudio((timerEinde - Date.now()) / 1000)) stopRustAudio();
+  if (audioModus === "push") planPushBel((timerEinde - Date.now()) / 1000);
+  else if (!startRustAudio((timerEinde - Date.now()) / 1000)) stopRustAudio();
 }
 
 function stopTimer() {
@@ -702,6 +726,7 @@ function stopTimer() {
   document.querySelector("main").classList.remove("timer-actief");
   stopAudioKeepAlive();
   stopRustAudio();
+  if (!pushHerplannen) annuleerPushBel();
 }
 
 function startAudioKeepAlive() {
@@ -854,7 +879,11 @@ const RUST_SAMPLERATE = BEL_RENDER_RATE / BEL_DECIMATIE;
 let belSamples = null;
 let rustAudioUrl = null;
 let rustAudioActief = false;
-const AUDIO_MODI = ["playback", "transient", "transient-solo", "ambient"];
+// De eerste vier zijn navigator.audioSession-types: die spelen zelf een WAV af.
+// "push" is geen audiosessie maar het tegendeel — de app speelt niets en laat
+// de Worker op het juiste moment een melding sturen (zie push-worker/README.md).
+const AUDIO_SESSIE_MODI = ["playback", "transient", "transient-solo", "ambient"];
+const AUDIO_MODI = [...AUDIO_SESSIE_MODI, "push"];
 let audioModus = "playback";
 
 // De keten (W13-test, v0.10): Eduard wil de podcast tijdens de rust horen en
@@ -906,13 +935,16 @@ function vulGeluidsformulier() {
   audioModusKnoppen().forEach((knop) => { knop.checked = knop.value === audioModus; });
   elementen.audioKeten.checked = ketenActief;
   toonKetenDiag();
+  // "push" gebruikt geen audiosessie en blijft dus ook bruikbaar waar
+  // navigator.audioSession ontbreekt (desktop, Chromium).
   if (!audioSessieBeschikbaar()) {
-    audioModusKnoppen().forEach((knop) => { knop.disabled = true; });
+    audioModusKnoppen().forEach((knop) => { knop.disabled = AUDIO_SESSIE_MODI.includes(knop.value); });
     elementen.audioKeten.disabled = true;
     elementen.audioModusMelding.className = "melding";
     elementen.audioModusMelding.textContent =
-      "Deze browser kan de audiosessie niet instellen; de bel gedraagt zich hier zoals de browser bepaalt.";
+      "Deze browser kan de audiosessie niet instellen; alleen de meldingsstand is hier te kiezen.";
   }
+  elementen.audioKeten.disabled = elementen.audioKeten.disabled || audioModus === "push";
 }
 
 const AUDIO_MODUS_UITLEG = {
@@ -920,6 +952,7 @@ const AUDIO_MODUS_UITLEG = {
   transient: "Andere audio wordt gedempt zolang de rust loopt; test of de bel op slot doorkomt.",
   "transient-solo": "Andere audio pauzeert zolang de rust loopt en hoort daarna vanzelf te hervatten.",
   ambient: "Bel mengt met andere audio. Op stil of met het scherm op slot kan de bel wegvallen.",
+  push: "De app speelt zelf niets; de Worker stuurt een melding. Podcast blijft lopen — zet de belschakelaar niet op stil.",
 };
 
 function slaGeluidsinstellingOp() {
@@ -934,11 +967,24 @@ function slaGeluidsinstellingOp() {
   // Een lopende rust draait nog op de oude sessiesoort. Deze change komt uit
   // een tik op de schakelaar, dus opnieuw starten mag: zo gaat de keuze direct
   // in en hoeft er niet eerst een set afgevinkt te worden.
+  elementen.audioKeten.disabled = !audioSessieBeschikbaar() || audioModus === "push";
+  if (audioModus === "push" && !pushKlaar()) {
+    elementen.audioModusMelding.className = "melding fout";
+    elementen.audioModusMelding.textContent =
+      "Zet meldingen eerst op onder \"Melding op slot\" hieronder, anders blijft de rust stil.";
+  }
   if (timerEinde) {
     const resterend = Math.max(0, (timerEinde - Date.now()) / 1000);
-    // Na de bel (resterend 0) zou opnieuw starten de bel nog eens laten
-    // klinken; dan alleen de lopende audio (bijv. de ketenstilte) stoppen.
-    if (resterend <= 0 || !startRustAudio(resterend)) stopRustAudio();
+    if (audioModus === "push") {
+      // Het media-element loslaten geeft de podcast meteen weer vrij.
+      stopRustAudio();
+      if (resterend > 0) planPushBel(resterend);
+    } else {
+      annuleerPushBel();
+      // Na de bel (resterend 0) zou opnieuw starten de bel nog eens laten
+      // klinken; dan alleen de lopende audio (bijv. de ketenstilte) stoppen.
+      if (resterend <= 0 || !startRustAudio(resterend)) stopRustAudio();
+    }
   }
 }
 
@@ -1180,6 +1226,250 @@ function zetMediaSessie(seconden, titel) {
     navigator.mediaSession.setActionHandler("pause", () => stopTimer());
     navigator.mediaSession.setActionHandler("stop", () => stopTimer());
   } catch { }
+}
+
+// ---------------------------------------------------------------------------
+// De rustbel als pushmelding (v0.11)
+//
+// Waarom dit bestaat: op iOS mag een PWA met het scherm op slot geen nieuw
+// geluid starten, en het enige dat wél werkt — één WAV die de hele rust beslaat
+// — bezet de audiosessie en pauzeert dus de podcast (W11 t/m W13 in
+// BACKLOG.md). Een melding komt van buiten, heeft geen audiosessie nodig en
+// laat andere audio met rust. De app plant hem binnen de tik waarmee de set
+// wordt afgevinkt; een eigen Cloudflare Worker (push-worker/) houdt de wekker
+// vast en stuurt hem op tijd.
+//
+// De prijs ervan: het is het standaard meldingsgeluid van iOS, het volgt de
+// belschakelaar van de telefoon (op stil hoor je hem niet) en er moet bereik
+// zijn op het moment van afvinken.
+
+let pushGepland = false;
+
+function leesPushInstellingen() {
+  const bewaard = leesJson(OPSLAG.push);
+  return bewaard && typeof bewaard === "object" ? bewaard : {};
+}
+
+function pushKlaar() {
+  const p = leesPushInstellingen();
+  return Boolean(p.url && p.sleutel && p.id);
+}
+
+function meldingenMogelijk() {
+  return "Notification" in window && "PushManager" in window && "serviceWorker" in navigator;
+}
+
+function toonPushMelding(tekst, soort = "") {
+  elementen.pushMelding.className = `melding${soort ? ` ${soort}` : ""}`;
+  elementen.pushMelding.textContent = tekst;
+}
+
+function vulPushFormulier() {
+  const p = leesPushInstellingen();
+  elementen.pushUrl.value = p.url ?? "";
+  elementen.pushSleutel.value = p.sleutel ?? "";
+  if (!meldingenMogelijk()) {
+    toonPushMelding(
+      "Deze browser kan geen meldingen ontvangen. Op de iPhone moet de app via Deel → Zet op beginscherm geïnstalleerd zijn en vanaf het beginscherm geopend worden.",
+      "fout",
+    );
+  } else if (p.id) {
+    toonPushMelding("Meldingen staan aan op dit toestel.", "goed");
+  }
+}
+
+function slaPushInstellingenOp() {
+  const url = elementen.pushUrl.value.trim().replace(/\/+$/, "");
+  const sleutel = elementen.pushSleutel.value.trim();
+  if (!url || !sleutel) {
+    toonPushMelding("Vul zowel de Worker-URL als de app-sleutel in.", "fout");
+    return false;
+  }
+  let ontleed = null;
+  try { ontleed = new URL(url); } catch { ontleed = null; }
+  if (!ontleed || ontleed.protocol !== "https:") {
+    toonPushMelding("De Worker-URL moet met https:// beginnen.", "fout");
+    return false;
+  }
+  // Wijst de URL naar een andere Worker, dan hoort het oude abonnement-id daar
+  // niet bij en moet er opnieuw geabonneerd worden.
+  const vorige = leesPushInstellingen();
+  const verhuisd = Boolean(vorige.url && vorige.url !== url);
+  const bewaard = schrijfJson(OPSLAG.push, {
+    ...vorige,
+    url,
+    sleutel,
+    ...(verhuisd ? { id: null, endpoint: null } : {}),
+  });
+  toonPushMelding(
+    bewaard ? "Opgeslagen. Tik nu op “Meldingen aanzetten”." : "Lokaal opslaan is mislukt.",
+    bewaard ? "goed" : "fout",
+  );
+  return bewaard;
+}
+
+async function zetMeldingenAan() {
+  if (!meldingenMogelijk()) {
+    toonPushMelding(
+      "Deze browser kan geen meldingen ontvangen. Op de iPhone: Deel → Zet op beginscherm, en open de app daarna vanaf het beginscherm.",
+      "fout",
+    );
+    return;
+  }
+  // Opslaan staat bewust vóór het vragen: requestPermission moet in dezelfde
+  // taak als de tik gebeuren, dus er mag geen await aan voorafgaan.
+  if (!slaPushInstellingenOp()) return;
+  let toestemming;
+  try {
+    toestemming = await Notification.requestPermission();
+  } catch (fout) {
+    toonPushMelding(veiligeFoutmelding(fout), "fout");
+    return;
+  }
+  if (toestemming !== "granted") {
+    toonPushMelding("Meldingen zijn geweigerd. Zet ze aan bij Instellingen → Meldingen → Workout.", "fout");
+    return;
+  }
+  toonPushMelding("Abonneren bij de Worker…");
+  await registreerPushAbonnement(true);
+}
+
+async function registreerPushAbonnement(luid = false) {
+  const instellingen = leesPushInstellingen();
+  try {
+    const registratie = await navigator.serviceWorker.ready;
+    const sleutelAntwoord = await fetch(`${instellingen.url}/sleutel`);
+    if (!sleutelAntwoord.ok) throw new Error(`De Worker antwoordde ${sleutelAntwoord.status} op /sleutel.`);
+    const publiek = (await sleutelAntwoord.json())?.publiek;
+    if (!publiek) throw new Error("De Worker gaf geen VAPID-sleutel terug.");
+
+    let abonnement = await registratie.pushManager.getSubscription();
+    // Een abonnement op een oudere VAPID-sleutel kan de Worker niet meer
+    // beleveren; opzeggen en opnieuw beginnen.
+    if (abonnement && !zelfdeVapidSleutel(abonnement, publiek)) {
+      await abonnement.unsubscribe();
+      abonnement = null;
+    }
+    if (!abonnement) {
+      abonnement = await registratie.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: base64urlNaarBytes(publiek),
+      });
+    }
+    const uit = await pushVerzoek("/abonneer", { abonnement: abonnement.toJSON() });
+    if (!uit?.id) throw new Error("De Worker gaf geen id terug.");
+    schrijfJson(OPSLAG.push, { ...leesPushInstellingen(), id: uit.id, endpoint: abonnement.endpoint });
+    if (luid) toonPushMelding("Meldingen staan aan. Stuur een testmelding om te horen of hij aankomt.", "goed");
+    return true;
+  } catch (fout) {
+    if (luid) toonPushMelding(veiligeFoutmelding(fout), "fout");
+    else console.warn("Pushabonnement vernieuwen mislukt:", veiligeFoutmelding(fout));
+    return false;
+  }
+}
+
+// iOS kan een pushabonnement vernieuwen terwijl de app dicht is; dan wijst het
+// bewaarde id bij de Worker naar een endpoint dat niet meer bestaat.
+async function controleerPushAbonnement() {
+  const instellingen = leesPushInstellingen();
+  if (!instellingen.url || !instellingen.sleutel) return;
+  if (!meldingenMogelijk() || Notification.permission !== "granted") return;
+  try {
+    const registratie = await navigator.serviceWorker.ready;
+    const abonnement = await registratie.pushManager.getSubscription();
+    if (!abonnement || abonnement.endpoint !== instellingen.endpoint) await registreerPushAbonnement(false);
+  } catch (fout) {
+    console.warn("Pushabonnement controleren mislukt:", veiligeFoutmelding(fout));
+  }
+}
+
+function zelfdeVapidSleutel(abonnement, publiek) {
+  const huidig = abonnement.options?.applicationServerKey;
+  if (!huidig) return true; // niet te controleren; laat het abonnement staan
+  const a = new Uint8Array(huidig);
+  const b = base64urlNaarBytes(publiek);
+  return a.length === b.length && a.every((waarde, i) => waarde === b[i]);
+}
+
+async function pushVerzoek(pad, lichaam) {
+  const { url, sleutel } = leesPushInstellingen();
+  if (!url || !sleutel) throw new Error("Worker-URL of app-sleutel ontbreekt.");
+  const antwoord = await fetch(`${url}${pad}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Workout-Sleutel": sleutel },
+    body: JSON.stringify(lichaam),
+    // Het verzoek moet afgemaakt worden ook als de telefoon meteen na de tik op
+    // slot gaat en de pagina bevriest.
+    keepalive: true,
+  });
+  const uit = await antwoord.json().catch(() => ({}));
+  if (!antwoord.ok) throw new Error(uit.fout || `De Worker antwoordde ${antwoord.status}.`);
+  return uit;
+}
+
+async function planPushBel(seconden) {
+  if (!pushKlaar()) {
+    meldPushInTimer("meldingen nog niet ingesteld");
+    return;
+  }
+  try {
+    await pushVerzoek("/plan", {
+      id: leesPushInstellingen().id,
+      seconden: Math.max(0, Math.round(seconden)),
+      titel: "Rust voorbij",
+      tekst: plan?.naam ? `Volgende set — ${plan.naam}` : "Volgende set.",
+    });
+    pushGepland = true;
+    meldPushInTimer("");
+  } catch (fout) {
+    pushGepland = false;
+    console.warn("Bel plannen mislukt:", veiligeFoutmelding(fout));
+    meldPushInTimer("melding niet gepland");
+  }
+}
+
+function annuleerPushBel() {
+  if (!pushGepland || !pushKlaar()) return;
+  pushGepland = false;
+  pushVerzoek("/annuleer", { id: leesPushInstellingen().id })
+    .catch((fout) => console.warn("Bel annuleren mislukt:", veiligeFoutmelding(fout)));
+}
+
+// Mislukt het plannen (geen bereik in de gym), dan moet dat te zien zijn zonder
+// dat het de rust onderbreekt: één regel achter het label van de timer.
+function meldPushInTimer(tekst) {
+  const label = elementen.timer.querySelector(".timer-label");
+  if (!label || !timerEinde || timerEinde - Date.now() <= 0) return;
+  label.textContent = tekst ? `Rust · ${tekst}` : "Rust";
+}
+
+async function stuurTestmelding() {
+  const knop = document.getElementById("push-test");
+  knop.disabled = true;
+  toonPushMelding("Testmelding versturen…");
+  try {
+    if (!pushKlaar() && !(await registreerPushAbonnement(true))) return;
+    const uit = await pushVerzoek("/test", { id: leesPushInstellingen().id });
+    const gelukt = Number(uit.status) < 300;
+    toonPushMelding(
+      gelukt
+        ? "Verstuurd. Hij komt binnen enkele seconden aan. Op het slotscherm hoor je hem alleen als de belschakelaar niet op stil staat."
+        : `De pushdienst weigerde hem: ${uit.status} ${uit.tekst || ""}`.trim(),
+      gelukt ? "goed" : "fout",
+    );
+  } catch (fout) {
+    toonPushMelding(veiligeFoutmelding(fout), "fout");
+  } finally {
+    knop.disabled = false;
+  }
+}
+
+function base64urlNaarBytes(tekst) {
+  const plat = tekst.replace(/-/g, "+").replace(/_/g, "/");
+  const ruw = atob(plat + "=".repeat((4 - (plat.length % 4)) % 4));
+  const uit = new Uint8Array(ruw.length);
+  for (let i = 0; i < ruw.length; i += 1) uit[i] = ruw.charCodeAt(i);
+  return uit;
 }
 
 // Scherm aan houden tijdens de sessie, zodat de rusttimer blijft lopen.

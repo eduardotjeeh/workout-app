@@ -36,6 +36,39 @@ self.addEventListener("activate", (event) => {
   })());
 });
 
+// De rustbel komt als pushmelding binnen: de Worker stuurt hem op het moment
+// dat de rust voorbij is, ook als de app dicht is en het scherm op slot staat.
+// iOS eist dat elke push een zichtbare melding oplevert (userVisibleOnly).
+self.addEventListener("push", (event) => {
+  let gegevens = {};
+  try {
+    gegevens = event.data ? event.data.json() : {};
+  } catch {
+    gegevens = {};
+  }
+  event.waitUntil(self.registration.showNotification(gegevens.titel || "Rust voorbij", {
+    body: gegevens.tekst || "Volgende set.",
+    icon: "./icon-192.png",
+    badge: "./icon-192.png",
+    // Eén tag met renotify: een nieuwe bel vervangt een oude in plaats van
+    // zich erbovenop te stapelen, maar laat wel opnieuw geluid horen.
+    tag: "rustbel",
+    renotify: true,
+    vibrate: [250, 120, 250],
+  }));
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  event.waitUntil((async () => {
+    const vensters = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+    for (const venster of vensters) {
+      if ("focus" in venster) return venster.focus();
+    }
+    return self.clients.openWindow ? self.clients.openWindow("./") : undefined;
+  })());
+});
+
 self.addEventListener("fetch", (event) => {
   const verzoek = event.request;
   const url = new URL(verzoek.url);

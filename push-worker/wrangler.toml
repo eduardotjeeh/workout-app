@@ -1,0 +1,23 @@
+# Workout-belplanner: plant één Web Push-melding per rustpauze.
+# Deploy: zie README.md. Draait op de gratis Workers-tier (SQLite-Durable Objects).
+
+name = "workout-bel"
+main = "src/worker.js"
+compatibility_date = "2026-09-01"
+
+# De PWA draait op GitHub Pages; zet hier de eigen Pages-origin neer zodat de
+# browser alleen die origin laat praten. "*" mag ook — de gedeelde sleutel is
+# de eigenlijke slotgracht — maar smaller is beter.
+[vars]
+TOEGESTANE_ORIGIN = "*"
+VAPID_ONDERWERP = "mailto:eduardotjeeh@gmail.com"
+
+# Eén Durable Object per abonnement (= per telefoon). Zijn alarm is de wekker:
+# een Worker heeft zelf geen geheugen tussen verzoeken en kan niet wachten.
+[[durable_objects.bindings]]
+name = "BELPLANNER"
+class_name = "Belplanner"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Belplanner"]

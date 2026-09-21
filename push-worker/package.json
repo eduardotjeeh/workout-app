@@ -1,0 +1,16 @@
+{
+  "name": "workout-bel",
+  "version": "0.11.0",
+  "private": true,
+  "type": "module",
+  "description": "Cloudflare Worker die de rustbel als pushmelding stuurt, zodat de podcast door kan spelen.",
+  "scripts": {
+    "test": "node tools/test-webpush.mjs && node tools/test-worker.mjs",
+    "sleutels": "node tools/vapid-sleutels.mjs",
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "wrangler": "^4"
+  }
+}
