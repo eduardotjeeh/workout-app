@@ -58,6 +58,20 @@ Warming-up (optioneel, berekend volgens `Gezondheid/data/training/schema.md` §W
 
 In het sessie-JSON komen beide terug met een `gedaan`-vlag: `warming_up: [{tekst, gedaan}]` en `opwarm_sets: [{kg, reps, gedaan}]`. Opwarmsets tellen nooit mee als werksets.
 
+Superset (optioneel, sinds v0.13, W16): opeenvolgende oefeningen met dezelfde `superset`-tekst vormen één blok. Gebruik per superset één hoofdletter (`"A"`, `"B"`, …); de app nummert de leden in plan-volgorde als A1, A2.
+
+```json
+{ "naam": "Bicep Curl (Cable)",       "superset": "A", "rust_sec": 0,  "stap_kg": 4.5, "sets": [ … ] },
+{ "naam": "Triceps Pushdown (Cable)", "superset": "A", "rust_sec": 90, "stap_kg": 2.3, "sets": [ … ] }
+```
+
+- **Ronde** = set *n* van elk lid. De app toont het blok als één kaart met de sets afwisselend per ronde (A1, A2, A1, A2, …); kg, reps, Skip, extra sets en RPE blijven per oefening.
+- **Rust in een superset:** tussen de leden geen rust — de app start geen timer en stopt een rust die nog liep (ook een geplande melding). Na de ronde volgt de grootste `rust_sec` van het blok. Zet die op het laatste lid en `0` op de andere; dezelfde waarde op alle leden werkt ook. De app kijkt per afgevinkte set of een ander lid in dezelfde ronde nog open staat: zo ja, direct door; zo nee, rondrust. Daardoor klopt het ook bij een andere volgorde in de sportschool, na wisselen in de app en bij een ongelijk aantal sets. Een korte pauze tussen de leden kent het contract niet; wie die wil, plant twee losse oefeningen.
+- Alleen opeenvolgende leden tellen. Een losse oefening met een `superset`-waarde zonder buurman met dezelfde waarde gedraagt zich als een gewone oefening (eigen `rust_sec`). Verplaatsen in de app houdt een blok bij elkaar: een lid schuift binnen het blok, aan de rand verhuist het hele blok.
+- Plannen zonder `superset` werken ongewijzigd.
+
+In het sessie-JSON komt `superset` ongewijzigd terug op elke oefening die het in het plan had. De sets blijven per oefening staan (ronde *n* = set *n*), dus de hub ziet dat de oefening in superset is gedaan — RPE's daaruit zijn niet vergelijkbaar met losse sets.
+
 ### `sessies/JJJJ-MM-DD.json` — geschreven door de app
 
 Zelfde structuur als het plan, aangevuld met wat er werkelijk gebeurde:
@@ -89,6 +103,7 @@ Regels:
 - Overgeslagen set: `"gedaan": false`, zonder `kg`/`reps`. Extra set of oefening: gewoon toevoegen, zonder `gepland_*`.
 - `rpe` (optioneel, 6–10 in stappen van 0,5) staat op de laatste gedane werkset van een oefening.
 - Vervangt Eduard een oefening in de sportschool (machine bezet), dan krijgt de oefening `"vervangen_van": "<oorspronkelijke naam>"`; de `gepland_*`-waarden van het origineel blijven staan als referentie.
+- `superset` (optioneel) komt ongewijzigd uit het plan terug; zie de superset-alinea bij het plan. Een vervangen lid houdt zijn `superset`.
 - Bestandsnaam = trainingsdatum (lokale tijd). Tweede sessie op één dag: `-2` suffix.
 - Kg met decimale punt, JSON in UTF-8.
 

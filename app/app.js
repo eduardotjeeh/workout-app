@@ -249,6 +249,7 @@ function maakWerkplan(ruwPlan) {
       : [],
     oefeningen: ruwPlan.oefeningen.map((oefening) => ({
       naam: oefening.naam,
+      ...(supersetId(oefening) ? { superset: supersetId(oefening) } : {}),
       rust_sec: Number.isFinite(oefening.rust_sec) ? oefening.rust_sec : 0,
       stap_kg: oefening.stap_kg === "dumbbell" ? "dumbbell"
         : (Number.isFinite(oefening.stap_kg) && oefening.stap_kg > 0 ? oefening.stap_kg : 2.5),
@@ -270,6 +271,60 @@ function maakWerkplan(ruwPlan) {
       })),
     })),
   };
+}
+
+// Supersets (W16): opeenvolgende oefeningen met dezelfde `superset`-tekst
+// vormen één blok. Een losse oefening is een blok van één; zo hoeven tekenen,
+// verplaatsen en rust maar één soort blok te kennen.
+function supersetId(oefening) {
+  return typeof oefening?.superset === "string" ? oefening.superset.trim() : "";
+}
+
+function bepaalBlokken(oefeningen) {
+  const blokken = [];
+  oefeningen.forEach((oefening, index) => {
+    const id = supersetId(oefening);
+    const vorige = blokken.at(-1);
+    if (id && vorige?.id === id) vorige.leden.push(index);
+    else blokken.push({ id, leden: [index] });
+  });
+  return blokken;
+}
+
+function blokVan(oefening) {
+  const index = plan.oefeningen.indexOf(oefening);
+  const blok = bepaalBlokken(plan.oefeningen).find((kandidaat) => kandidaat.leden.includes(index));
+  return blok ? blok.leden.map((i) => plan.oefeningen[i]) : [oefening];
+}
+
+// A1, A2 … zolang de hub zich aan één letter per superset houdt; anders 1, 2 ….
+function supersetLabel(id, positie) {
+  return `${id.length <= 2 ? id.toUpperCase() : ""}${positie + 1}`;
+}
+
+// Rust na een afgevinkte set. In een superset ga je direct door naar het
+// volgende lid; pas als de ronde rond is volgt de rust, en dat is de grootste
+// `rust_sec` van het blok. Of de ronde rond is hangt af van wat er nog open
+// staat, niet van de volgorde: zo klopt het ook als Eduard de pushdown eerst
+// doet of de leden in de app van plek wisselt.
+function rustNaSet(oefening, setIndex) {
+  const blok = blokVan(oefening);
+  if (blok.length < 2) return { seconden: oefening.rust_sec, overgang: false };
+  const rondeLoopt = blok.some((lid) => lid !== oefening && lid.sets[setIndex]?.status === "open");
+  if (rondeLoopt) return { seconden: 0, overgang: true };
+  return { seconden: rondeRust(blok), overgang: false };
+}
+
+function rondeRust(blok) {
+  return Math.max(0, ...blok.map((lid) => (Number.isFinite(lid.rust_sec) ? lid.rust_sec : 0)));
+}
+
+function startRustNaSet(oefening, setIndex) {
+  const { seconden, overgang } = rustNaSet(oefening, setIndex);
+  if (seconden > 0) startTimer(seconden);
+  // Direct door naar het volgende lid: een rust die nog liep is voorbij, en een
+  // geplande melding zou midden in de volgende set binnenkomen.
+  else if (overgang && timerEinde) stopTimer();
 }
 
 function isGeldigConcept(concept) {
@@ -339,100 +394,176 @@ function renderOefeningen() {
     elementen.oefeningen.appendChild(kaart);
   }
 
-  plan.oefeningen.forEach((oefening, oefeningIndex) => {
-    const kaart = document.createElement("section");
-    kaart.className = "oefening";
+  bepaalBlokken(plan.oefeningen).forEach((blok) => {
+    elementen.oefeningen.appendChild(blok.leden.length > 1
+      ? maakSupersetKaart(blok)
+      : maakOefeningKaart(plan.oefeningen[blok.leden[0]], blok.leden[0]));
+  });
+}
 
-    const kop = document.createElement("div");
-    kop.className = "oefening-kop";
-    if (oefening.extra || oefening.vervangen_van) {
-      const naam = document.createElement("input");
-      naam.className = "oefening-naam";
-      naam.type = "text";
-      naam.placeholder = oefening.vervangen_van ? "Vervangende oefening" : "Naam extra oefening";
-      naam.value = oefening.naam;
-      naam.addEventListener("input", () => {
-        oefening.naam = naam.value;
-        bewaarConcept(true);
-      });
-      kop.appendChild(naam);
-    } else {
-      const titel = document.createElement("h2");
-      titel.textContent = oefening.naam;
-      kop.appendChild(titel);
-    }
-    const menuKnop = maakKnop("⋯", "icoonknop", "Oefeningmenu: verplaatsen of vervangen");
-    menuKnop.addEventListener("click", () => {
-      oefening.menuOpen = !oefening.menuOpen;
+function maakOefeningKaart(oefening, oefeningIndex) {
+  const kaart = document.createElement("section");
+  kaart.className = "oefening";
+  kaart.appendChild(maakOefeningKop(oefening, oefeningIndex));
+
+  oefening.sets.forEach((set, setIndex) => {
+    kaart.appendChild(maakSetRegel(oefening, set, oefeningIndex, setIndex));
+  });
+
+  if (oefening.sets.some((set) => set.status === "gedaan")) {
+    kaart.appendChild(maakRpeRij(oefening));
+  }
+
+  const extraSet = maakKnop("+ Extra set", "secundair breed set-toevoegen");
+  extraSet.addEventListener("click", () => voegSetToe(oefening));
+  kaart.appendChild(extraSet);
+  return kaart;
+}
+
+// Eén kaart voor het hele blok: eerst per lid de kop met notitie, dan de sets
+// per ronde afwisselend (A1, A2, A1, A2 …), zodat Eduard niet tussen twee
+// kaarten heen en weer hoeft te scrollen. RPE en extra sets blijven per lid.
+function maakSupersetKaart(blok) {
+  const leden = blok.leden.map((index) => plan.oefeningen[index]);
+  const labels = leden.map((_, positie) => supersetLabel(blok.id, positie));
+  const rondes = Math.max(...leden.map((lid) => lid.sets.length));
+
+  const kaart = document.createElement("section");
+  kaart.className = "oefening superset";
+  const kop = document.createElement("p");
+  kop.className = "superset-kop";
+  kop.textContent = supersetOmschrijving(leden, rondes);
+  kaart.appendChild(kop);
+
+  leden.forEach((lid, positie) => {
+    kaart.appendChild(maakOefeningKop(lid, blok.leden[positie], labels[positie]));
+  });
+
+  for (let ronde = 0; ronde < rondes; ronde += 1) {
+    const rondeKop = document.createElement("p");
+    rondeKop.className = "ronde-kop";
+    rondeKop.textContent = `Ronde ${ronde + 1}`;
+    kaart.appendChild(rondeKop);
+    leden.forEach((lid, positie) => {
+      if (!lid.sets[ronde]) return;
+      kaart.appendChild(maakSetRegel(lid, lid.sets[ronde], blok.leden[positie], ronde, labels[positie]));
+    });
+  }
+
+  leden.forEach((lid, positie) => {
+    if (lid.sets.some((set) => set.status === "gedaan")) kaart.appendChild(maakRpeRij(lid, labels[positie]));
+  });
+
+  const extra = document.createElement("div");
+  extra.className = "superset-extra";
+  leden.forEach((lid, positie) => {
+    const knop = maakKnop(`+ Set ${labels[positie]}`, "secundair compact set-toevoegen", `Extra set ${lid.naam}`);
+    knop.addEventListener("click", () => voegSetToe(lid));
+    extra.appendChild(knop);
+  });
+  kaart.appendChild(extra);
+  return kaart;
+}
+
+function supersetOmschrijving(leden, rondes) {
+  const rust = rondeRust(leden);
+  const naRonde = rust > 0 ? `${formatteerTijd(rust)} rust na de ronde` : "geen rust na de ronde";
+  return `Superset · ${rondes} ronde${rondes === 1 ? "" : "s"} · direct door, ${naRonde}`;
+}
+
+// Kop, notitie, toelichting en opwarmsets van één oefening; in een superset
+// met het label (A1, A2) ervoor.
+function maakOefeningKop(oefening, oefeningIndex, label = "") {
+  const lid = document.createElement("div");
+  lid.className = "oefening-lid";
+  lid.dataset.oefeningIndex = String(oefeningIndex);
+
+  const kop = document.createElement("div");
+  kop.className = "oefening-kop";
+  const titelvak = document.createElement("div");
+  titelvak.className = "oefening-titel";
+  if (label) {
+    const badge = document.createElement("span");
+    badge.className = "superset-badge";
+    badge.textContent = label;
+    titelvak.appendChild(badge);
+  }
+  if (oefening.extra || oefening.vervangen_van) {
+    const naam = document.createElement("input");
+    naam.className = "oefening-naam";
+    naam.type = "text";
+    naam.placeholder = oefening.vervangen_van ? "Vervangende oefening" : "Naam extra oefening";
+    naam.value = oefening.naam;
+    naam.addEventListener("input", () => {
+      oefening.naam = naam.value;
+      bewaarConcept(true);
+    });
+    titelvak.appendChild(naam);
+  } else {
+    const titel = document.createElement("h2");
+    titel.textContent = oefening.naam;
+    titelvak.appendChild(titel);
+  }
+  kop.appendChild(titelvak);
+  const menuKnop = maakKnop("⋯", "icoonknop", "Oefeningmenu: verplaatsen of vervangen");
+  menuKnop.addEventListener("click", () => {
+    oefening.menuOpen = !oefening.menuOpen;
+    bewaarEnRender();
+  });
+  kop.appendChild(menuKnop);
+  lid.appendChild(kop);
+
+  if (oefening.vervangen_van) {
+    const vervangenTekst = document.createElement("p");
+    vervangenTekst.className = "notitie";
+    vervangenTekst.textContent = `Vervangt: ${oefening.vervangen_van}`;
+    lid.appendChild(vervangenTekst);
+  }
+
+  if (oefening.menuOpen) lid.appendChild(maakOefeningMenu(oefening, oefeningIndex));
+
+  const { kort: notitieKort, lang: notitieLang } = splitsNotitie(oefening.notitie, oefening.toelichting);
+  if (notitieKort) {
+    const notitie = document.createElement("p");
+    notitie.className = "notitie";
+    notitie.textContent = notitieKort;
+    lid.appendChild(notitie);
+  }
+  if (notitieLang) lid.appendChild(maakToelichting(notitieLang));
+
+  if (oefening.extra) {
+    const rustLabel = document.createElement("label");
+    rustLabel.className = "notitie rust-invoer";
+    rustLabel.textContent = "Rust ";
+    const rust = document.createElement("input");
+    rust.type = "number";
+    rust.inputMode = "numeric";
+    rust.min = "0";
+    rust.step = "5";
+    rust.value = oefening.rust_sec;
+    rust.addEventListener("input", () => {
+      oefening.rust_sec = getalUitInvoer(rust);
+      bewaarConcept(true);
+    });
+    rustLabel.append(rust, document.createTextNode(" sec"));
+    lid.appendChild(rustLabel);
+  }
+
+  (oefening.opwarm_sets ?? []).forEach((set) => {
+    const regel = document.createElement("div");
+    regel.className = "set opwarm" + (set.gedaan ? " gedaan" : "");
+    const vink = maakKnop("✓", "vink", set.gedaan ? "Opwarmset weer openzetten" : "Opwarmset afvinken");
+    vink.addEventListener("click", () => {
+      set.gedaan = !set.gedaan;
       bewaarEnRender();
     });
-    kop.appendChild(menuKnop);
-    kaart.appendChild(kop);
-
-    if (oefening.vervangen_van) {
-      const vervangenTekst = document.createElement("p");
-      vervangenTekst.className = "notitie";
-      vervangenTekst.textContent = `Vervangt: ${oefening.vervangen_van}`;
-      kaart.appendChild(vervangenTekst);
-    }
-
-    if (oefening.menuOpen) kaart.appendChild(maakOefeningMenu(oefening, oefeningIndex));
-
-    const { kort: notitieKort, lang: notitieLang } = splitsNotitie(oefening.notitie, oefening.toelichting);
-    if (notitieKort) {
-      const notitie = document.createElement("p");
-      notitie.className = "notitie";
-      notitie.textContent = notitieKort;
-      kaart.appendChild(notitie);
-    }
-    if (notitieLang) kaart.appendChild(maakToelichting(notitieLang));
-
-    if (oefening.extra) {
-      const rustLabel = document.createElement("label");
-      rustLabel.className = "notitie rust-invoer";
-      rustLabel.textContent = "Rust ";
-      const rust = document.createElement("input");
-      rust.type = "number";
-      rust.inputMode = "numeric";
-      rust.min = "0";
-      rust.step = "5";
-      rust.value = oefening.rust_sec;
-      rust.addEventListener("input", () => {
-        oefening.rust_sec = getalUitInvoer(rust);
-        bewaarConcept(true);
-      });
-      rustLabel.append(rust, document.createTextNode(" sec"));
-      kaart.appendChild(rustLabel);
-    }
-
-    (oefening.opwarm_sets ?? []).forEach((set) => {
-      const regel = document.createElement("div");
-      regel.className = "set opwarm" + (set.gedaan ? " gedaan" : "");
-      const vink = maakKnop("✓", "vink", set.gedaan ? "Opwarmset weer openzetten" : "Opwarmset afvinken");
-      vink.addEventListener("click", () => {
-        set.gedaan = !set.gedaan;
-        bewaarEnRender();
-      });
-      const tekst = document.createElement("span");
-      tekst.className = "opwarm-tekst";
-      tekst.textContent = `opwarmen · ${_toonKg(set.kg)} kg × ${set.reps}`;
-      regel.append(vink, tekst);
-      kaart.appendChild(regel);
-    });
-
-    oefening.sets.forEach((set, setIndex) => {
-      kaart.appendChild(maakSetRegel(oefening, set, oefeningIndex, setIndex));
-    });
-
-    if (oefening.sets.some((set) => set.status === "gedaan")) {
-      kaart.appendChild(maakRpeRij(oefening));
-    }
-
-    const extraSet = maakKnop("+ Extra set", "secundair breed set-toevoegen");
-    extraSet.addEventListener("click", () => voegSetToe(oefening));
-    kaart.appendChild(extraSet);
-    elementen.oefeningen.appendChild(kaart);
+    const tekst = document.createElement("span");
+    tekst.className = "opwarm-tekst";
+    tekst.textContent = `${label ? `${label} · ` : ""}opwarmen · ${_toonKg(set.kg)} kg × ${set.reps}`;
+    regel.append(vink, tekst);
+    lid.appendChild(regel);
   });
+  return lid;
 }
 
 function maakOefeningMenu(oefening, oefeningIndex) {
@@ -440,11 +571,11 @@ function maakOefeningMenu(oefening, oefeningIndex) {
   rij.className = "oefening-menu";
 
   const omhoog = maakKnop("↑ Omhoog", "secundair compact");
-  omhoog.disabled = oefeningIndex === 0;
+  omhoog.disabled = !verplaatsDoel(oefeningIndex, -1);
   omhoog.addEventListener("click", () => verplaatsOefening(oefeningIndex, -1));
 
   const omlaag = maakKnop("↓ Omlaag", "secundair compact");
-  omlaag.disabled = oefeningIndex === plan.oefeningen.length - 1;
+  omlaag.disabled = !verplaatsDoel(oefeningIndex, 1);
   omlaag.addEventListener("click", () => verplaatsOefening(oefeningIndex, 1));
 
   rij.append(omhoog, omlaag);
@@ -471,7 +602,7 @@ function maakOefeningMenu(oefening, oefeningIndex) {
       oefening.vervangen_van = oefening.naam;
       oefening.menuOpen = false;
       bewaarEnRender();
-      const invoer = elementen.oefeningen.querySelectorAll(".oefening:not(.warmup-kaart)")[oefeningIndex]?.querySelector(".oefening-naam");
+      const invoer = elementen.oefeningen.querySelector(`[data-oefening-index="${oefeningIndex}"] .oefening-naam`);
       if (invoer) { invoer.focus(); invoer.select(); }
     });
     rij.appendChild(vervang);
@@ -479,27 +610,47 @@ function maakOefeningMenu(oefening, oefeningIndex) {
   return rij;
 }
 
+// Een superset blijft bij elkaar: een lid schuift binnen zijn blok, en aan de
+// rand van het blok verhuist het hele blok voorbij het buurblok. Een losse
+// oefening springt zo ook in één keer over een superset heen.
+function verplaatsDoel(index, richting) {
+  const blokken = bepaalBlokken(plan.oefeningen);
+  const b = blokken.findIndex((blok) => blok.leden.includes(index));
+  const blok = blokken[b];
+  const binnen = blok.leden[blok.leden.indexOf(index) + richting];
+  if (binnen !== undefined) return { soort: "binnen", doel: binnen };
+  const buur = blokken[b + richting];
+  return buur ? { soort: "blok", blok, buur } : null;
+}
+
 function verplaatsOefening(index, richting) {
-  const doel = index + richting;
-  if (doel < 0 || doel >= plan.oefeningen.length) return;
-  const [oefening] = plan.oefeningen.splice(index, 1);
-  plan.oefeningen.splice(doel, 0, oefening);
+  const doel = verplaatsDoel(index, richting);
+  if (!doel) return;
+  if (doel.soort === "binnen") {
+    [plan.oefeningen[index], plan.oefeningen[doel.doel]] = [plan.oefeningen[doel.doel], plan.oefeningen[index]];
+  } else {
+    const start = doel.blok.leden[0];
+    const groep = plan.oefeningen.splice(start, doel.blok.leden.length);
+    const nieuweStart = richting < 0 ? doel.buur.leden[0] : start + doel.buur.leden.length;
+    plan.oefeningen.splice(nieuweStart, 0, ...groep);
+  }
   bewaarEnRender();
 }
 
-function maakRpeRij(oefening) {
+function maakRpeRij(oefening, lidLabel = "") {
   const rij = document.createElement("div");
   rij.className = "rpe-rij";
 
   const label = document.createElement("span");
   label.className = "eenheid";
-  label.textContent = "RPE";
+  label.textContent = lidLabel ? `RPE ${lidLabel}` : "RPE";
   rij.appendChild(label);
 
   const knoppen = document.createElement("div");
   knoppen.className = "rpe-knoppen";
   for (let waarde = 6; waarde <= 10; waarde += 0.5) {
-    const knop = maakKnop(String(waarde).replace(".", ","), "rpe-knop" + (oefening.rpe === waarde ? " actief" : ""), `RPE ${waarde}`);
+    const knop = maakKnop(String(waarde).replace(".", ","), "rpe-knop" + (oefening.rpe === waarde ? " actief" : ""),
+      lidLabel ? `RPE ${waarde} voor ${oefening.naam}` : `RPE ${waarde}`);
     knop.addEventListener("click", () => {
       oefening.rpe = oefening.rpe === waarde ? null : waarde;
       bewaarEnRender();
@@ -510,16 +661,20 @@ function maakRpeRij(oefening) {
   return rij;
 }
 
-function maakSetRegel(oefening, set, oefeningIndex, setIndex) {
+function maakSetRegel(oefening, set, oefeningIndex, setIndex, label = "") {
   const regel = document.createElement("div");
   regel.className = `set${set.status === "gedaan" ? " gedaan" : ""}${set.status === "overgeslagen" ? " overgeslagen" : ""}`;
 
-  const vink = maakKnop("✓", "vink", set.status === "gedaan" ? "Set weer openzetten" : "Set afvinken");
+  // In een superset staat het label (A1, A2) in het lege vinkvak: zo is te zien
+  // welke oefening de regel is zonder dat er breedte bij moet op 375 px.
+  const vinkActie = set.status === "gedaan" ? "Set weer openzetten" : "Set afvinken";
+  const vink = maakKnop(label && set.status !== "gedaan" ? label : "✓", label ? "vink met-label" : "vink",
+    label ? `${vinkActie}: ${oefening.naam}` : vinkActie);
   vink.addEventListener("click", () => {
     const wordtGedaan = set.status !== "gedaan";
     set.status = wordtGedaan ? "gedaan" : "open";
     bewaarEnRender();
-    if (wordtGedaan && oefening.rust_sec > 0) startTimer(oefening.rust_sec);
+    if (wordtGedaan) startRustNaSet(oefening, setIndex);
   });
 
   const waarden = document.createElement("div");
@@ -1434,10 +1589,9 @@ function bouwSessieJson() {
     sessie.warming_up = plan.warming_up.map((item) => ({ tekst: item.tekst, gedaan: Boolean(item.gedaan) }));
   }
   sessie.oefeningen = plan.oefeningen.map((oefening) => {
-      const resultaat = {
-        naam: oefening.naam.trim(),
-        sets: oefening.sets.map(maakContractSet),
-      };
+      const resultaat = { naam: oefening.naam.trim() };
+      if (supersetId(oefening)) resultaat.superset = supersetId(oefening);
+      resultaat.sets = oefening.sets.map(maakContractSet);
       if (oefening.opwarm_sets?.length) {
         resultaat.opwarm_sets = oefening.opwarm_sets.map((set) => ({
           kg: set.kg, reps: set.reps, gedaan: Boolean(set.gedaan),

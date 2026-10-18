@@ -154,10 +154,29 @@ Een bewaarde keuze voor een geschrapte stand valt terug op `playback`; getest me
 
 **Bekende grenzen van deze route:** het standaard meldingsgeluid van iOS in plaats van de boksbel, bereik nodig op het moment van afvinken, en een Focus-stand die meldingen onderdrukt onderdrukt ook deze. De melding komt via het alarm plus de pushdienst een tel of twee later dan de seconde zelf.
 
+## W16 — Supersets in het contract ✅ gebouwd (2026-10-18, Opus, v0.13.0; uit W6)
+
+De hub plant sinds blok 8/9 een curl + pushdown-superset in B, en vanaf 2026-10-20 ook in A. Tot nu toe werd die nagebootst: twee losse oefeningen, de curl met `rust_sec: 30` en "Superset: direct door naar pushdown" in de notitie. In de app moest Eduard daardoor per set tussen twee kaarten heen en weer scrollen.
+
+- **Contract:** optioneel veld `superset` per oefening (één hoofdletter, `"A"`). Opeenvolgende oefeningen met dezelfde waarde vormen één blok; ronde *n* = set *n* van elk lid. Komt ongewijzigd terug in het sessie-JSON, zodat de hub weet dat de RPE uit een superset komt. Plannen zonder het veld werken als vanouds.
+- **Rust:** tussen de leden geen rust. De app start geen timer en stopt een rust die nog liep, inclusief de geplande melding. Na de ronde volgt de grootste `rust_sec` van het blok. Of de ronde rond is, leidt de app af uit wat er in die ronde nog open staat, niet uit de volgorde. Daardoor klopt het ook als Eduard de pushdown eerst doet, de leden in de app van plek wisselt of een extra set toevoegt. Eerste opzet was "`rust_sec` van het laatste lid = rondrust". Bij wisselen binnen het blok verschoof de rondrust dan naar het lid met `0`. Vandaar het maximum.
+- **App:** één kaart per blok. Bovenaan "Superset · 3 rondes · direct door, 1:30 rust na de ronde", daarna per lid de kop met A1/A2-label, notitie, Waarom en opwarmsets, en dan de sets per ronde afwisselend. Het label staat in het lege vinkvak, want op 375 px is er geen breedte over voor een extra kolom. RPE-rij, "+ Set A1/A2", Skip en Vervangen blijven per oefening. Verplaatsen houdt het blok bij elkaar: een lid schuift binnen het blok, aan de rand verhuist het hele blok. Een losse oefening springt in één keer over een superset heen.
+- **Hub:** `Gezondheid/prompts/app-plan.md` §Supersets (veld, `rust_sec: 0` op de eerste en de rondrust op de laatste, gelijk aantal sets, geen "superset" meer in de notitie). `app-import.md` noemt het veld bij het importeren.
+
+**Getest** in Chromium op 375 px met het plan van 15-10, de curl en pushdown omgezet naar `superset: "A"`:
+- *Playback:* A1 afvinken start geen timer. A2 start 1:30 met het media-element. A1 van de volgende ronde tijdens die rust stopt timer en audio. Omgekeerde volgorde (A2 eerst) gaf ook de rust na de laatste set van de ronde.
+- *Na wisselen in de app* (pushdown als A1) bleef het "direct door, 1:30 na de ronde".
+- *Push* (gestubde Worker): binnen de ronde geen verzoek, na de ronde `/plan 90`. A1 tijdens de rust stuurt `/annuleer`, "+30 s" stuurt `/plan 120`; het media-element blijft ongemoeid.
+- *Ongelijke sets:* een extra set A1 vormt ronde 4 en krijgt de rondrust. Een plan met 3 × curl en 2 × pushdown gaf in ronde 3 alleen A1, ook met rondrust.
+- *Sessie-JSON:* `superset: "A"` op beide oefeningen, RPE 8 en 9 elk op de laatste gedane set van de eigen oefening.
+- *Overig:* sessieherstel na herladen behoudt het blok. Vervangen binnen het blok focust het naamveld. Geen horizontale scroll (alleen de RPE-strook scrolt binnen zichzelf, zoals sinds W7).
+- *Oud plan:* het echte `next.json` zonder het veld toont losse kaarten, curl 0:30 en pushdown 1:30 zoals voorheen. Verplaatsen en vervangen werken, en het sessie-JSON heeft geen `superset`.
+
+**Nog te doen:** de hub zet het veld in het eerstvolgende plan (A, 2026-10-20). Daarna een keer in de sportschool proberen.
+
 ## W6 — Later / ideeën
 
 - Plate calculator (welke schijven op de stang).
 - Meerdere geplande sessies vooruit (`plan/` als lijstje) voor een heel weekblok.
-- Supersets in het contract.
 - Lichte modus / thema.
 - Per-machine `stap_kg` verfijnen zodra Eduard de echte stapgroottes meldt.
