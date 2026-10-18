@@ -174,6 +174,34 @@ De hub plant sinds blok 8/9 een curl + pushdown-superset in B, en vanaf 2026-10-
 
 **Nog te doen:** de hub zet het veld in het eerstvolgende plan (A, 2026-10-20). Daarna een keer in de sportschool proberen.
 
+## W17 — Trainingsduur uit afvinktijden ✅ gebouwd (2026-10-18, Opus, v0.14.0)
+
+De hub plant op duur ("16 werksets, ±45 min"), maar `gestart` → `afgerond` meet de training niet. In 6 van de 18 sessies kwam die duur op 3 tot 22 uur uit:
+- *11-08:* 1338 min, afgerond de volgende middag.
+- *22-09:* gestart 14:33, terwijl Eduard rond 17:15 traint.
+- *17-09:* afgerond 3 uur na de laatste set.
+
+Oorzaak:
+- **`gestart`** is het moment waarop de app het concept bouwde. Een onaangeroerd concept wordt bij elke herlaad opnieuw gebouwd, dus `gestart` is de laatste herlaad vóór de eerste wijziging. Terugschakelen naar een app die iOS nog in het geheugen heeft, laadt niets opnieuw: om 14:33 kijken en om 17:15 de eerste tik geeft 14:33.
+- **`afgerond`** is de tik op "Sessie afronden", wanneer die ook komt.
+- **`datum`** kwam uit `gestart` en kon dus ook een dag te vroeg vallen.
+
+Wat er veranderd is:
+
+- **Contract:** elk afgevinkt item (werkset, opwarmset, warming-up-regel) krijgt optioneel `tijd`, het moment van de tik als ISO met offset. Op sessieniveau komen `eerste_set` en `laatste_set` erbij. Trainingsduur = `laatste_set` − `eerste_set`. `datum` volgt de dag van `eerste_set`, en zonder tijden zoals vroeger `gestart`. `gestart` en `afgerond` blijven staan, met in `ARCHITECTUUR.md` §Tijden eerlijk beschreven wat ze meten. Oude sessies blijven geldig.
+- **App:** `zetAfvinktijd` zet de tijd bij afvinken en wist hem bij ont-vinken en bij Skip. Opnieuw afvinken geeft de nieuwe tijd. De tijd staat op het item in `plan`, dus het concept bewaart hem zonder extra code. Supersets gebruiken dezelfde vink-handler. `afvinktijden` sorteert op `Date.parse`, niet op tekst, voor het geval een sessie over een zomertijdwissel loopt.
+- **Hub:** `Gezondheid/prompts/app-import.md` stap 8. Met tijden: eerste → laatste afvinktik. Zonder tijden: gestart → afgerond alleen als die bij één training past, anders "onbruikbaar". Daarnaast intervallen tussen afvinktikken als rust plus uitvoering, alleen te noemen als het iets verklaart. `scripts/dashboard.py` leest alleen kg/reps/gedaan en rekent geen duur; daar hoefde niets te veranderen.
+
+**Getest** in Chromium met het plan van 20-10 plus een warming-up-regel:
+- *Afvinken:* warming-up, opwarmset, werksets en een superset-ronde (A1, A2) kregen elk hun eigen seconde.
+- *Wissen:* ont-vinken van een werkset en van een opwarmset wiste `tijd`. Skip op een afgevinkte set gaf `overgeslagen` zonder `tijd`. Opnieuw afvinken gaf een nieuwe tijd.
+- *Herladen:* het concept was na herladen byte-gelijk, zes items afgevinkt in beeld.
+- *Afronden:* met `gestart` handmatig op de avond ervoor gezet gaf het JSON `datum` 2026-10-18 en pad `sessies/2026-10-18.json`. `eerste_set` was de warming-up, `laatste_set` de pushdown, en `tijd` alleen op gedane items.
+- *Concept van vóór v0.14* (tijden eruit gehaald): afronden gaf geen `tijd`, `eerste_set` of `laatste_set`, en `datum` volgde `gestart`.
+- *Hub:* `dashboard.py` → `bouw_dashboard()` liep op een kopie van alle 18 sessies plus een sessie met tijden zonder fout. Het schreef niets weg.
+
+**Bekende grens:** een set die pas na de training wordt afgevinkt, krijgt de tijd van die latere tik. Een sessie die over de app-update heen loopt, heeft alleen tijden voor de sets van na de update; de hub noemt de duur dan een ondergrens.
+
 ## W6 — Later / ideeën
 
 - Plate calculator (welke schijven op de stang).

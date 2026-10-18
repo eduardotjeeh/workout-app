@@ -56,7 +56,7 @@ Warming-up (optioneel, berekend volgens `Gezondheid/data/training/schema.md` §W
 - plan-niveau `"warming_up": [{ "tekst": "3–4 min hometrainer, rustig tempo" }]` — algemene checklist, afvinkbaar in de app;
 - per oefening `"opwarm_sets": [{ "kg": 15, "reps": 6 }]` — getoond boven de werksets, afvinkbaar, zonder rusttimer.
 
-In het sessie-JSON komen beide terug met een `gedaan`-vlag: `warming_up: [{tekst, gedaan}]` en `opwarm_sets: [{kg, reps, gedaan}]`. Opwarmsets tellen nooit mee als werksets.
+In het sessie-JSON komen beide terug met een `gedaan`-vlag: `warming_up: [{tekst, gedaan}]` en `opwarm_sets: [{kg, reps, gedaan}]`, afgevinkt aangevuld met `tijd` (zie §Tijden). Opwarmsets tellen nooit mee als werksets.
 
 Superset (optioneel, sinds v0.13, W16): opeenvolgende oefeningen met dezelfde `superset`-tekst vormen één blok. Gebruik per superset één hoofdletter (`"A"`, `"B"`, …); de app nummert de leden in plan-volgorde als A1, A2.
 
@@ -82,21 +82,32 @@ Zelfde structuur als het plan, aangevuld met wat er werkelijk gebeurde:
   "datum": "2026-07-21",
   "gestart": "2026-07-21T18:05:00+02:00",
   "afgerond": "2026-07-21T19:02:00+02:00",
+  "eerste_set": "2026-07-21T18:09:12+02:00",
+  "laatste_set": "2026-07-21T18:21:40+02:00",
   "plan_van": "2026-07-19",
   "naam": "Herstart blok 1 — Full body A",
   "notitie": "Squat voelde zwaar, laatste set ingekort.",
   "oefeningen": [
     {
       "naam": "Back squat",
+      "opwarm_sets": [
+        { "kg": 40, "reps": 5, "gedaan": true, "tijd": "2026-07-21T18:09:12+02:00" }
+      ],
       "sets": [
-        { "gepland_kg": 60, "gepland_reps": 5, "kg": 60, "reps": 5, "gedaan": true },
-        { "gepland_kg": 60, "gepland_reps": 5, "kg": 60, "reps": 5, "gedaan": true },
-        { "gepland_kg": 60, "gepland_reps": 5, "kg": 55, "reps": 4, "gedaan": true, "rpe": 8 }
+        { "gepland_kg": 60, "gepland_reps": 5, "kg": 60, "reps": 5, "gedaan": true, "tijd": "2026-07-21T18:12:30+02:00" },
+        { "gepland_kg": 60, "gepland_reps": 5, "kg": 60, "reps": 5, "gedaan": true, "tijd": "2026-07-21T18:17:05+02:00" },
+        { "gepland_kg": 60, "gepland_reps": 5, "kg": 55, "reps": 4, "gedaan": true, "tijd": "2026-07-21T18:21:40+02:00", "rpe": 8 }
       ]
     }
   ]
 }
 ```
+
+Tijden (sinds v0.14, W17):
+- `tijd` (optioneel) staat op elk afgevinkt item — werkset, opwarmset en warming-up-regel — en is het moment van de afvinktik (ISO met offset, op de seconde). Ont-vinken of Skip wist hem; opnieuw afvinken geeft de nieuwe tijd.
+- `eerste_set` / `laatste_set` = de vroegste en de laatste `tijd` in de sessie, opwarmsets en warming-up inbegrepen. Alleen aanwezig als er minstens één `tijd` is. **Trainingsduur = `laatste_set` − `eerste_set`**; de uitvoering van het eerste item (hooguit een minuut) valt erbuiten.
+- `gestart` en `afgerond` meten níét de training. `gestart` is het moment waarop de app het concept bouwde: de laatste keer dat de app opnieuw laadde vóór de eerste wijziging (terugschakelen naar een app die nog in het geheugen staat laadt niets opnieuw). `afgerond` is de tik op "Sessie afronden", ook als die uren later komt. Beide blijven staan; `gestart` is ook de sleutel waarmee de app een al geüploade sessie herkent.
+- Sessies van vóór v0.14 hebben geen `tijd`, `eerste_set` en `laatste_set`; ze blijven geldig.
 
 Regels:
 - `kg`/`reps` zijn de werkelijke waarden; `gepland_*` blijft staan zodat de hub afwijkingen ziet.
@@ -104,7 +115,7 @@ Regels:
 - `rpe` (optioneel, 6–10 in stappen van 0,5) staat op de laatste gedane werkset van een oefening.
 - Vervangt Eduard een oefening in de sportschool (machine bezet), dan krijgt de oefening `"vervangen_van": "<oorspronkelijke naam>"`; de `gepland_*`-waarden van het origineel blijven staan als referentie.
 - `superset` (optioneel) komt ongewijzigd uit het plan terug; zie de superset-alinea bij het plan. Een vervangen lid houdt zijn `superset`.
-- Bestandsnaam = trainingsdatum (lokale tijd). Tweede sessie op één dag: `-2` suffix.
+- `datum` en bestandsnaam = trainingsdatum (lokale tijd): de dag van `eerste_set`, en zonder tijden de dag van `gestart`. Tweede sessie op één dag: `-2` suffix.
 - Kg met decimale punt, JSON in UTF-8.
 
 ## Offline-gedrag

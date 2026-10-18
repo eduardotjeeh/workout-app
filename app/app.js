@@ -383,6 +383,7 @@ function renderOefeningen() {
       const vink = maakKnop("✓", "vink", item.gedaan ? "Weer openzetten" : "Afvinken");
       vink.addEventListener("click", () => {
         item.gedaan = !item.gedaan;
+        zetAfvinktijd(item, item.gedaan);
         bewaarEnRender();
       });
       const tekst = document.createElement("span");
@@ -555,6 +556,7 @@ function maakOefeningKop(oefening, oefeningIndex, label = "") {
     const vink = maakKnop("✓", "vink", set.gedaan ? "Opwarmset weer openzetten" : "Opwarmset afvinken");
     vink.addEventListener("click", () => {
       set.gedaan = !set.gedaan;
+      zetAfvinktijd(set, set.gedaan);
       bewaarEnRender();
     });
     const tekst = document.createElement("span");
@@ -673,6 +675,7 @@ function maakSetRegel(oefening, set, oefeningIndex, setIndex, label = "") {
   vink.addEventListener("click", () => {
     const wordtGedaan = set.status !== "gedaan";
     set.status = wordtGedaan ? "gedaan" : "open";
+    zetAfvinktijd(set, wordtGedaan);
     bewaarEnRender();
     if (wordtGedaan) startRustNaSet(oefening, setIndex);
   });
@@ -693,12 +696,40 @@ function maakSetRegel(oefening, set, oefeningIndex, setIndex, label = "") {
   } else {
     actie.addEventListener("click", () => {
       set.status = set.status === "overgeslagen" ? "open" : "overgeslagen";
+      zetAfvinktijd(set, false);
       bewaarEnRender();
     });
   }
 
   regel.append(vink, waarden, actie);
   return regel;
+}
+
+// Afvinktijd (W17): het moment van de tik op ✓. `gestart` en `afgerond` meten
+// wanneer het concept is gebouwd en wanneer "Sessie afronden" is getikt, niet de
+// training; de hub rekent de duur van de eerste tot de laatste afvinktijd. De
+// tijd zit in het plan-object, dus het concept bewaart hem en herladen houdt hem.
+function zetAfvinktijd(item, gedaan) {
+  if (gedaan) item.tijd = formatLokaleDatumtijd();
+  else delete item.tijd;
+}
+
+function afvinktijden() {
+  const afgevinkt = [
+    ...(plan.warming_up ?? []).filter((item) => item.gedaan),
+    ...plan.oefeningen.flatMap((oefening) => [
+      ...(oefening.opwarm_sets ?? []).filter((set) => set.gedaan),
+      ...oefening.sets.filter((set) => set.status === "gedaan"),
+    ]),
+  ];
+  return afgevinkt
+    .map((item) => item.tijd)
+    .filter((tijd) => typeof tijd === "string" && Number.isFinite(Date.parse(tijd)))
+    .sort((a, b) => Date.parse(a) - Date.parse(b));
+}
+
+function metTijd(item, gedaan) {
+  return gedaan && typeof item.tijd === "string" ? { tijd: item.tijd } : {};
 }
 
 function stapVoor(oefening, veld, basis, richting) {
@@ -1576,17 +1607,23 @@ function valideerSessie() {
 
 function bouwSessieJson() {
   const afgerond = formatLokaleDatumtijd();
+  const tijden = afvinktijden();
   const sessie = {
     versie: 1,
-    datum: gestart.slice(0, 10),
+    // De trainingsdag is de dag van de eerste afvinktik; `gestart` kan van een
+    // eerder geopende app zijn.
+    datum: (tijden[0] ?? gestart).slice(0, 10),
     gestart,
     afgerond,
+    ...(tijden.length ? { eerste_set: tijden[0], laatste_set: tijden.at(-1) } : {}),
     plan_van: plan.gepland_op,
     naam: plan.naam,
     notitie: elementen.sessieNotitie.value.trim(),
   };
   if (plan.warming_up?.length) {
-    sessie.warming_up = plan.warming_up.map((item) => ({ tekst: item.tekst, gedaan: Boolean(item.gedaan) }));
+    sessie.warming_up = plan.warming_up.map((item) => ({
+      tekst: item.tekst, gedaan: Boolean(item.gedaan), ...metTijd(item, item.gedaan),
+    }));
   }
   sessie.oefeningen = plan.oefeningen.map((oefening) => {
       const resultaat = { naam: oefening.naam.trim() };
@@ -1594,7 +1631,7 @@ function bouwSessieJson() {
       resultaat.sets = oefening.sets.map(maakContractSet);
       if (oefening.opwarm_sets?.length) {
         resultaat.opwarm_sets = oefening.opwarm_sets.map((set) => ({
-          kg: set.kg, reps: set.reps, gedaan: Boolean(set.gedaan),
+          kg: set.kg, reps: set.reps, gedaan: Boolean(set.gedaan), ...metTijd(set, set.gedaan),
         }));
       }
       if (oefening.vervangen_van) resultaat.vervangen_van = oefening.vervangen_van;
@@ -1613,6 +1650,7 @@ function maakContractSet(set) {
     resultaat.kg = set.kg;
     resultaat.reps = set.reps;
     resultaat.gedaan = true;
+    Object.assign(resultaat, metTijd(set, true));
   } else {
     resultaat.gedaan = false;
   }
