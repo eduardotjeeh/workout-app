@@ -67,17 +67,71 @@ Afruil, expliciet in de UI benoemd: `ambient` wordt door iOS gedempt zodra de zi
 
 Getest op Chromium (API afwezig → schakelaar uitgeschakeld met melding) en met een gestubde `navigator.audioSession`: uit → `playback` + kaart "Rust 0:05", aan → `ambient` en geen kaart, omschakelen tijdens een rust van 60 s behield de resterende tijd en liet het element doorspelen, "Stop rust" ruimde blob-URL en timer op. Tikvlak 44 px, geen horizontale scroll op 375 px. **Bevestigd in de sportschool op 2026-09-02: dat doet hij niet.** In ambient-modus met het scherm op slot hoort Eduard de bel niet. Opvolging in W13.
 
-## W13 — Bel hoorbaar met het scherm op slot én de podcast door ✅ afgesloten (opgelost in W14 hieronder)
+## W13 — Bel hoorbaar met het scherm op slot én de podcast door ✅ afgesloten (opgelost in W15)
 
-> Uitkomst: geen enkele audiosessie-soort levert de bel af op slot behalve `playback`. Het antwoord kwam uiteindelijk van buiten de audiosessie, via Web Push — zie W14. De rest van dit hoofdstuk is het onderzoeksspoor dat daarheen leidde.
+> Uitkomst: geen enkele audiosessie-soort levert de bel af op slot behalve `playback`. Het antwoord kwam uiteindelijk van buiten de audiosessie, via Web Push — zie W15. De rest van dit hoofdstuk is het onderzoeksspoor dat daarheen leidde.
 
-**Uitkomst (Eduard, tests op 2026-09-15 en 2026-09-17):** met het scherm op slot komt de bel alleen door onder `playback` — de stand die de podcast de hele rust pauzeert. `transient`, `transient-solo` en `ambient` leveren de bel op slot niet af, en de keten lost dat niet op (die start pas ná een bel die niet komt). Conclusie uit het protocol hieronder ("werkt geen van beide op slot"): een iOS-PWA kan via `navigator.audioSession` niet tegelijk de podcast laten spelen én de bel op slot afleveren. `playback` blijft de aanbevolen stand; de drie andere standen en de keten kunnen uit de UI (terugsnoeien).
+**Uitkomst (Eduard, tests op 2026-09-15 en 2026-09-17):** met het scherm op slot komt de bel alleen door onder `playback` — de stand die de podcast de hele rust pauzeert. `transient`, `transient-solo` en `ambient` leveren de bel op slot niet af, en de keten lost dat niet op (die start pas ná een bel die niet komt). Conclusie uit het protocol hieronder ("werkt geen van beide op slot"): een iOS-PWA kan via `navigator.audioSession` niet tegelijk de podcast laten spelen én de bel op slot afleveren. `playback` blijft de aanbevolen stand; de drie andere standen en de keten kunnen uit de UI (terugsnoeien — gedaan in v0.12.0, zie W15).
 
 **Diagnose bevestigt het:** de keten-diagnose meldde bij elke poging op de telefoon "handler niet gedraaid". De `ended`-handler van een media-element draait met het scherm op slot dus niet, en de keten kon nooit werken — los van de sessiesoort.
 
-**Let op bij het herlezen van deze uitkomst:** op de schermafdruk van de testavond staat de belschakelaar van de telefoon op **stil** (doorgestreepte bel in de statusbalk). Media-afspelen (`playback`) negeert die schakelaar, de andere drie categorieën niet. Het is dus mogelijk dat `transient` en `transient-solo` niet zozeer op het slotscherm stukliepen als wel op de stilteschakelaar. Eén hertest van dertig seconden met de schakelaar áán geeft uitsluitsel; dat is nooit apart gedaan (test 5 in het protocol hierboven zette hem juist expliciet op stil).
+**Kanttekening, zonder gevolg sinds W15:** op de schermafdruk van de testavond staat de belschakelaar van de telefoon op **stil**. Media-afspelen (`playback`) negeert die schakelaar, de andere drie categorieën niet. Het kan dus zijn dat `transient` en `transient-solo` op de stilteschakelaar stukliepen en niet op het slotscherm. Een hertest met de schakelaar áán is nooit gedaan; die is alleen nog zinvol als die standen ooit terugkomen.
 
-## W14 — Melding op slot via een eigen Worker ✅ gebouwd (2026-09-17, Opus, v0.11.0)
+Niet opnieuw onderzoeken: lokale notificaties, Web Push zonder server en Live Activities vielen in W11 al af.
+
+### Onderzoeksspoor
+
+**2026-09-02: de openstaande vraag uit W12 is beantwoord, en het antwoord is nee.** Eduard trainde op 02-09 met *Bel mengen met podcast of muziek* aan, luisterde een podcast en vergrendelde zijn telefoon: *"Ik hoor de bel niet als de app dicht is."* De `ambient`-categorie houdt de podcast dus wel intact, maar levert de bel niet af zodra de PWA naar de achtergrond gaat. Daarmee is de instelling in de praktijk geen keuze tussen twee werkende opties maar tussen twee halve: `playback` = bel wél, podcast niet; `ambient` = podcast wél, bel niet.
+
+Wat Eduard wil is allebei tegelijk: podcast door, telefoon op slot, bel hoorbaar.
+
+**Kandidaat: de andere `navigator.audioSession`-types.** De app kende er toen twee (`app.js`, `startRustAudio` → `zetAudioSessie(mengMetAndereAudio ? "ambient" : "playback")`), maar WebKit ondersteunt er meer, en twee daarvan zijn semantisch precies bedoeld voor een korte onderbreking bovenop lopende audio:
+
+- `"transient"` — **dempt** andere audio tijdelijk (ducking) en herstelt die daarna. Best case: de podcast loopt de hele rust zachtjes door en de bel komt er hoorbaar overheen, ook met het scherm uit.
+- `"transient-solo"` — **pauzeert** andere audio, die daarna automatisch hervat. Slechter dan ducking, maar nog altijd beter dan `playback`, waar niet is vastgelegd of de podcast uit zichzelf terugkomt.
+
+**Bekende beperking van de huidige opzet.** De WAV beslaat de héle rustperiode (W11: dat is precies waarom de bel met het scherm uit werkt — `setInterval` bevriest in de achtergrond, dus er is niets dat later een geluid kan starten). Een `transient`-sessie duurt daardoor ook de hele rust: de podcast zou 1,5–3 minuten gedempt blijven in plaats van alleen de 2,4 s van de bel. Of dat acceptabel is, moet Eduard horen. De sessiesoort halverwege omschakelen kan niet, om dezelfde reden dat er geen timer kan aftellen.
+
+**Eerste testprotocol** (op de telefoon, want een gestubde `audioSession` zegt hier niets — het gaat om echt iOS-gedrag):
+
+1. Podcast starten, app openen, set afvinken met `type = "transient"`, telefoon vergrendelen. Klinkt de bel? Speelt de podcast door, en zo ja: gedempt of op volume?
+2. Idem met `"transient-solo"`.
+3. Beide ook met de zijschakelaar op stil (`ambient` faalt daar; de vraag is of transient dat ook doet).
+4. Controleren of de podcast na de bel op eigen kracht terugkomt.
+
+**Uitkomst → vorm.** Werkt `transient`, dan vervangt dat `ambient` als de "mengen"-stand en verdwijnt de afruil grotendeels. Werkt alleen `transient-solo`, dan wordt de instelling een keuze uit drie in plaats van twee. Werkt geen van beide, dan is de conclusie dat een iOS-PWA dit niet kan en blijft `playback` de aanbevolen stand — dat was toen ook het advies aan Eduard: schakelaar **uit**, bel gaat vóór podcast.
+
+**Stand 2026-09-14 (Fable, v0.9.0):** de schakelaar *Bel mengen met podcast of muziek* is vervangen door een keuze uit vier audiosessie-soorten onder Instellingen → Geluid: `playback` (standaard, "Bel gaat vóór"), `transient`, `transient-solo` en `ambient`. De keuze wordt bewaard als `{ modus }` in `workout-geluid-v1`; een oude `{ mengen: true }` wordt als `ambient` gelezen, alles anders als `playback`. De Now Playing-kaart verschijnt alleen bij `playback`; in de andere standen blijft de kaart van de podcast-app staan. Omschakelen tijdens een lopende rust herstart de WAV met de resterende tijd, zoals in W12. Op Chromium (geen `navigator.audioSession`) staan alle vier uitgeschakeld met uitleg. Getest met een gestubde `audioSession`: elke stand zet het juiste type, migratie klopt, omschakelen tijdens een rust van 60 s behield de tijd, "Stop rust" ruimt op; tikvlak 44 px, geen horizontale scroll op 375 px. **Wat nog moet: het testprotocol hieronder op de telefoon**, dan de uitkomst hier noteren en de keuze terugsnoeien tot wat werkt.
+
+**Gewenst eindgedrag (Eduard, 2026-09-14):** podcast speelt tijdens de rust; de bel pauzeert de podcast; tijdens de set blijft hij stil (focus op mind-muscle connection), ook met de app dicht en het scherm op slot; bij het afvinken van de set start de rust en hervat de podcast. Let op: dat is het spiegelbeeld van wat alle vier de standen in v0.9.0 doen. De WAV beslaat de rust, dus de app "speelt" tijdens de rust en zwijgt tijdens de set — de podcast wordt dus juist tijdens de rust gepauzeerd of gedempt en tijdens de set vrijgelaten. Geen van de vier standen kan het gewenste gedrag leveren; de test hieronder levert wél de bouwstenen: welke sessiesoort de bel op slot aflevert, en of iOS de podcast uit zichzelf hervat. Opvolgkandidaat: ketenen — rust-WAV onder `transient` (podcast gedempt maar hoorbaar), en in de `ended`-handler omschakelen naar `playback` met een stille WAV die loopt tot de set is afgevinkt (houdt de podcast gepauzeerd tijdens de set). Of die handler op slot nog draait is de kernvraag; dat vergt een v0.10-testbuild.
+
+**Testprotocol v0.9.0 (2026-09-14).** Vooraf: app openen en onderaan Instellingen controleren dat er versie 0.9.0 staat; zo niet, app volledig sluiten en opnieuw openen. Een plan met korte rust is handig — of gewoon "Stop rust" en opnieuw afvinken. Per stand: podcast starten, app openen, Instellingen → Geluid → stand kiezen, set afvinken, meteen scherm op slot, wachten tot de bel. Noteer per stand vier dingen: (a) bel gehoord ja/nee, (b) podcast tijdens de rust: door op volume / zachter / gepauzeerd, (c) podcast na de bel: speelt / komt vanzelf terug / blijft stil, (d) Now Playing-kaart op het slotscherm: app / podcast.
+
+| # | Stand | Zijschakelaar | Verwachting |
+|---|---|---|---|
+| 1 | Bel gaat vóór (`playback`) | normaal | bel ja; podcast gepauzeerd; na de bel: onbekend — dit is de referentie |
+| 2 | Podcast zachter (`transient`) | normaal | bel ja?; podcast zachter; komt terug op volume |
+| 3 | Podcast pauzeert en hervat (`transient-solo`) | normaal | bel ja?; podcast gepauzeerd; hervat vanzelf |
+| 4 | Podcast door op volume (`ambient`) | normaal | bel nee (bevestiging W12) |
+| 5 | de beste van 2 en 3 | **stil** | bel ja? — `ambient` faalt hier, de vraag is of transient ook |
+| 6 | de beste van 2 en 3 | normaal | scherm niet vergrendelen maar naar de podcast-app wisselen: bel nog hoorbaar? |
+
+Uitkomst → vorm: werkt 2 op slot én op stil, dan wordt `transient` de basis van de keten. Werkt alleen 3, dan `transient-solo`. Werkt geen van beide op slot, dan kan een iOS-PWA dit niet en blijft `playback` de aanbevolen stand.
+
+**Stand 2026-09-14 avond (Fable, v0.10.0):** de keten is gebouwd als extra vinkje onder Instellingen → Geluid, *Keten: na de bel podcast gepauzeerd houden tot de set is afgevinkt*, te combineren met een van de vier standen (bedoeld: transient). Werking: de rust-WAV krijgt een `ended`-handler; die zet de audiosessie op `transient-solo` en start een stille WAV van 2 s (8 kHz, 8-bit, 16 KB) met `loop = true`, zodat de media-engine hem zonder JavaScript herhaalt tot de volgende set is afgevinkt of "Stop rust" wordt getikt. De Now Playing-kaart toont dan "Set bezig — afvinken hervat de podcast"; de timerbalk "Set bezig · podcast gepauzeerd". Omdat het gedrag op slot onzichtbaar is, schrijft de app per keten een diagnose naar `workout-keten-diag-v1` (rust gestart, bel afgelopen + of de app in de achtergrond was, stilte gestart of geweigerd met foutmelding, gestopt) en toont die met de vijf vorige ketens onder het vinkje. Omschakelen van de instelling ná de bel start de bel niet opnieuw maar stopt alleen de lopende audio. Getest in Chromium met gestubde `audioSession`: rust 1 s → na 3,4 s handler gedraaid, sessie `transient-solo`, stilte loopt en herhaalt, volgende afvinken stopt de stilte en start de nieuwe rust onder `transient`; geschiedenis en guard werken. **Kernvraag voor de telefoon:** draait de `ended`-handler met het scherm op slot, en staat WebKit `play()` daar toe zonder tik? De diagnoseregel beantwoordt dat na de test.
+
+Test 7 (keten): stand 2 + keten aan, podcast aan, set afvinken, scherm op slot. Verwacht: podcast zachter tijdens de rust, bel, daarna stilte (podcast gepauzeerd) tot je de volgende set afvinkt, dan podcast terug (zachter). Noteer: (a) bel gehoord, (b) podcast na de bel gepauzeerd of gewoon door, (c) na afvinken hervat, (d) wat de diagnoseregel onder het vinkje meldt. Faalt de stilte op slot maar werkt hij met de app in beeld, dan is de handler het probleem en niet de sessiesoort.
+
+## W14 — Notities in de app zijn cue-regels, uitleg gaat achter "Waarom" ✅ (2026-09-15, Fable, v0.10.1)
+
+Eduard over het plan van 2026-09-15: de bijschriften in de app zijn veel te uitbundig; tijdens de training leest hij die nooit, juist omdat hij zijn tijd optimaliseert. Meting: per oefening 376–761 tekens `notitie`, plan-niveau ruim 1000 — de hub schreef zijn hele onderbouwing (geschiedenis, RPE-verloop, overload-regels) in het veld dat de app altijd toont. Drie ingrepen:
+- **Contract:** `notitie` is een cue-regel (per oefening ~90 tekens, plan ~120): penstand/schijven, afstelling, één vormcue, schrapvolgorde. Nieuw optioneel veld `toelichting` voor de onderbouwing; komt niet terug in het sessie-JSON.
+- **App:** toont `toelichting` ingeklapt achter "▸ Waarom" (`<details>`, tikvlak 2 rem). Vangnet: een `notitie` langer dan 120 tekens wordt op een woordgrens afgeknipt met "…" en de volledige tekst schuift bij de toelichting — een te lange notitie kan de kaart dus nooit meer volzetten.
+- **Hub:** `Gezondheid/prompts/app-plan.md` krijgt de lengtegrens als harde regel plus de verdeling notitie/toelichting/daglog. Het plan van 2026-09-15 is direct herschreven naar het nieuwe patroon zodat de avondtraining er al van profiteert.
+
+## W15 — Melding op slot via een eigen Worker ✅ (2026-09-17, Opus, v0.11.0; teruggesnoeid in v0.12.0)
+
+_In de commits `b92b330` en `b0d5d71` heet dit nog W14; dat nummer was al vergeven aan de notities._
 
 Gekozen route uit de drie opvolgkandidaten: **Web Push met een eigen Cloudflare Worker**. De andere twee blijven liggen — Klok-timer via Opdrachten (app-wissel per set) en een Capacitor-wrapper (breekt beslissing 1, PWA zonder Apple-account).
 
@@ -99,57 +153,6 @@ Gekozen route uit de drie opvolgkandidaten: **Web Push met een eigen Cloudflare 
 Een bewaarde keuze voor een geschrapte stand valt terug op `playback`; getest met `{"modus":"transient-solo","keten":true}` in localStorage. Beide resterende standen zijn daarna opnieuw nagelopen: `playback` start het media-element en stuurt niets, `push` laat het media-element met rust en stuurt één `/plan`, "+30 s" herplant en "Stop rust" annuleert.
 
 **Bekende grenzen van deze route:** het standaard meldingsgeluid van iOS in plaats van de boksbel, bereik nodig op het moment van afvinken, en een Focus-stand die meldingen onderdrukt onderdrukt ook deze. De melding komt via het alarm plus de pushdienst een tel of twee later dan de seconde zelf.
-
-
-**Stand 2026-09-14 avond (Fable, v0.10.0):** de keten is gebouwd als extra vinkje onder Instellingen → Geluid, *Keten: na de bel podcast gepauzeerd houden tot de set is afgevinkt*, te combineren met een van de vier standen (bedoeld: transient). Werking: de rust-WAV krijgt een `ended`-handler; die zet de audiosessie op `transient-solo` en start een stille WAV van 2 s (8 kHz, 8-bit, 16 KB) met `loop = true`, zodat de media-engine hem zonder JavaScript herhaalt tot de volgende set is afgevinkt of "Stop rust" wordt getikt. De Now Playing-kaart toont dan "Set bezig — afvinken hervat de podcast"; de timerbalk "Set bezig · podcast gepauzeerd". Omdat het gedrag op slot onzichtbaar is, schrijft de app per keten een diagnose naar `workout-keten-diag-v1` (rust gestart, bel afgelopen + of de app in de achtergrond was, stilte gestart of geweigerd met foutmelding, gestopt) en toont die met de vijf vorige ketens onder het vinkje. Omschakelen van de instelling ná de bel start de bel niet opnieuw maar stopt alleen de lopende audio. Getest in Chromium met gestubde `audioSession`: rust 1 s → na 3,4 s handler gedraaid, sessie `transient-solo`, stilte loopt en herhaalt, volgende afvinken stopt de stilte en start de nieuwe rust onder `transient`; geschiedenis en guard werken. **Kernvraag voor de telefoon:** draait de `ended`-handler met het scherm op slot, en staat WebKit `play()` daar toe zonder tik? De diagnoseregel beantwoordt dat na de test.
-
-Test 7 (keten): stand 2 + keten aan, podcast aan, set afvinken, scherm op slot. Verwacht: podcast zachter tijdens de rust, bel, daarna stilte (podcast gepauzeerd) tot je de volgende set afvinkt, dan podcast terug (zachter). Noteer: (a) bel gehoord, (b) podcast na de bel gepauzeerd of gewoon door, (c) na afvinken hervat, (d) wat de diagnoseregel onder het vinkje meldt. Faalt de stilte op slot maar werkt hij met de app in beeld, dan is de handler het probleem en niet de sessiesoort.
-
-**Stand 2026-09-14 (Fable, v0.9.0, nog niet gecommit):** de schakelaar *Bel mengen met podcast of muziek* is vervangen door een keuze uit vier audiosessie-soorten onder Instellingen → Geluid: `playback` (standaard, "Bel gaat vóór"), `transient`, `transient-solo` en `ambient`. De keuze wordt bewaard als `{ modus }` in `workout-geluid-v1`; een oude `{ mengen: true }` wordt als `ambient` gelezen, alles anders als `playback`. De Now Playing-kaart verschijnt alleen bij `playback`; in de andere standen blijft de kaart van de podcast-app staan. Omschakelen tijdens een lopende rust herstart de WAV met de resterende tijd, zoals in W12. Op Chromium (geen `navigator.audioSession`) staan alle vier uitgeschakeld met uitleg. Getest met een gestubde `audioSession`: elke stand zet het juiste type, migratie klopt, omschakelen tijdens een rust van 60 s behield de tijd, "Stop rust" ruimt op; tikvlak 44 px, geen horizontale scroll op 375 px. **Wat nog moet: het testprotocol hieronder op de telefoon**, dan de uitkomst hier noteren en de keuze terugsnoeien tot wat werkt.
-
-**De openstaande vraag uit W12 is beantwoord, en het antwoord is nee.** Eduard trainde op 02-09 met *Bel mengen met podcast of muziek* aan, luisterde een podcast en vergrendelde zijn telefoon: *"Ik hoor de bel niet als de app dicht is."* De `ambient`-categorie houdt de podcast dus wel intact, maar levert de bel niet af zodra de PWA naar de achtergrond gaat. Daarmee is de instelling in de praktijk geen keuze tussen twee werkende opties maar tussen twee halve: `playback` = bel wél, podcast niet; `ambient` = podcast wél, bel niet.
-
-Wat Eduard wil is allebei tegelijk: podcast door, telefoon op slot, bel hoorbaar.
-
-**Gewenst eindgedrag (Eduard, 2026-09-14):** podcast speelt tijdens de rust; de bel pauzeert de podcast; tijdens de set blijft hij stil (focus op mind-muscle connection), ook met de app dicht en het scherm op slot; bij het afvinken van de set start de rust en hervat de podcast. Let op: dat is het spiegelbeeld van wat alle vier de standen in v0.9.0 doen. De WAV beslaat de rust, dus de app "speelt" tijdens de rust en zwijgt tijdens de set — de podcast wordt dus juist tijdens de rust gepauzeerd of gedempt en tijdens de set vrijgelaten. Geen van de vier standen kan het gewenste gedrag leveren; de test hieronder levert wél de bouwstenen: welke sessiesoort de bel op slot aflevert, en of iOS de podcast uit zichzelf hervat. Opvolgkandidaat: ketenen — rust-WAV onder `transient` (podcast gedempt maar hoorbaar), en in de `ended`-handler omschakelen naar `playback` met een stille WAV die loopt tot de set is afgevinkt (houdt de podcast gepauzeerd tijdens de set). Of die handler op slot nog draait is de kernvraag; dat vergt een v0.10-testbuild.
-
-**Testprotocol v0.9.0 (2026-09-14).** Vooraf: app openen en onderaan Instellingen controleren dat er versie 0.9.0 staat; zo niet, app volledig sluiten en opnieuw openen. Een plan met korte rust is handig — of gewoon "Stop rust" en opnieuw afvinken. Per stand: podcast starten, app openen, Instellingen → Geluid → stand kiezen, set afvinken, meteen scherm op slot, wachten tot de bel. Noteer per stand vier dingen: (a) bel gehoord ja/nee, (b) podcast tijdens de rust: door op volume / zachter / gepauzeerd, (c) podcast na de bel: speelt / komt vanzelf terug / blijft stil, (d) Now Playing-kaart op het slotscherm: app / podcast.
-
-| # | Stand | Zijschakelaar | Verwachting |
-|---|---|---|---|
-| 1 | Bel gaat vóór (`playback`) | normaal | bel ja; podcast gepauzeerd; na de bel: onbekend — dit is de referentie |
-| 2 | Podcast zachter (`transient`) | normaal | bel ja?; podcast zachter; komt terug op volume |
-| 3 | Podcast pauzeert en hervat (`transient-solo`) | normaal | bel ja?; podcast gepauzeerd; hervat vanzelf |
-| 4 | Podcast door op volume (`ambient`) | normaal | bel nee (bevestiging W12) |
-| 5 | de beste van 2 en 3 | **stil** | bel ja? — `ambient` faalt hier, de vraag is of transient ook |
-| 6 | de beste van 2 en 3 | normaal | scherm niet vergrendelen maar naar de podcast-app wisselen: bel nog hoorbaar? |
-
-Uitkomst → vorm: werkt 2 op slot én op stil, dan wordt `transient` de basis van de keten. Werkt alleen 3, dan `transient-solo`. Werkt geen van beide op slot, dan kan een iOS-PWA dit niet en blijft `playback` de aanbevolen stand.
-
-**Kandidaat: de andere `navigator.audioSession`-types.** De app kent er nu twee (`app.js`, `startRustAudio` → `zetAudioSessie(mengMetAndereAudio ? "ambient" : "playback")`), maar WebKit ondersteunt er meer, en twee daarvan zijn semantisch precies bedoeld voor een korte onderbreking bovenop lopende audio:
-
-- `"transient"` — **dempt** andere audio tijdelijk (ducking) en herstelt die daarna. Best case: de podcast loopt de hele rust zachtjes door en de bel komt er hoorbaar overheen, ook met het scherm uit.
-- `"transient-solo"` — **pauzeert** andere audio, die daarna automatisch hervat. Slechter dan ducking, maar nog altijd beter dan `playback`, waar niet is vastgelegd of de podcast uit zichzelf terugkomt.
-
-**Bekende beperking van de huidige opzet.** De WAV beslaat de héle rustperiode (W11: dat is precies waarom de bel met het scherm uit werkt — `setInterval` bevriest in de achtergrond, dus er is niets dat later een geluid kan starten). Een `transient`-sessie duurt daardoor ook de hele rust: de podcast zou 1,5–3 minuten gedempt blijven in plaats van alleen de 2,4 s van de bel. Of dat acceptabel is, moet Eduard horen. De sessiesoort halverwege omschakelen kan niet, om dezelfde reden dat er geen timer kan aftellen.
-
-**Testprotocol** (op de telefoon, want een gestubde `audioSession` zegt hier niets — het gaat om echt iOS-gedrag):
-
-1. Podcast starten, app openen, set afvinken met `type = "transient"`, telefoon vergrendelen. Klinkt de bel? Speelt de podcast door, en zo ja: gedempt of op volume?
-2. Idem met `"transient-solo"`.
-3. Beide ook met de zijschakelaar op stil (`ambient` faalt daar; de vraag is of transient dat ook doet).
-4. Controleren of de podcast na de bel op eigen kracht terugkomt.
-
-**Uitkomst → vorm.** Werkt `transient`, dan vervangt dat `ambient` als de "mengen"-stand en verdwijnt de afruil grotendeels. Werkt alleen `transient-solo`, dan wordt de instelling een keuze uit drie in plaats van twee. Werkt geen van beide, dan is de conclusie dat een iOS-PWA dit niet kan en blijft `playback` de aanbevolen stand — dat is vandaag ook het advies aan Eduard: schakelaar **uit**, bel gaat vóór podcast.
-
-Niet opnieuw onderzoeken: lokale notificaties, Web Push zonder server en Live Activities vielen in W11 al af.
-
-## W14 — Notities in de app zijn cue-regels, uitleg gaat achter "Waarom" ✅ (2026-09-15, Fable, v0.10.1)
-
-Eduard over het plan van 2026-09-15: de bijschriften in de app zijn veel te uitbundig; tijdens de training leest hij die nooit, juist omdat hij zijn tijd optimaliseert. Meting: per oefening 376–761 tekens `notitie`, plan-niveau ruim 1000 — de hub schreef zijn hele onderbouwing (geschiedenis, RPE-verloop, overload-regels) in het veld dat de app altijd toont. Drie ingrepen:
-- **Contract:** `notitie` is een cue-regel (per oefening ~90 tekens, plan ~120): penstand/schijven, afstelling, één vormcue, schrapvolgorde. Nieuw optioneel veld `toelichting` voor de onderbouwing; komt niet terug in het sessie-JSON.
-- **App:** toont `toelichting` ingeklapt achter "▸ Waarom" (`<details>`, tikvlak 2 rem). Vangnet: een `notitie` langer dan 120 tekens wordt op een woordgrens afgeknipt met "…" en de volledige tekst schuift bij de toelichting — een te lange notitie kan de kaart dus nooit meer volzetten.
-- **Hub:** `Gezondheid/prompts/app-plan.md` krijgt de lengtegrens als harde regel plus de verdeling notitie/toelichting/daglog. Het plan van 2026-09-15 is direct herschreven naar het nieuwe patroon zodat de avondtraining er al van profiteert.
 
 ## W6 — Later / ideeën
 
