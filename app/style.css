@@ -424,9 +424,33 @@ button.rpe-knop.actief {
 
 #resultaat .breed + .breed { margin-top: 0.6rem; }
 
+.resultaat-status {
+  margin: 0.75rem 0;
+  padding: 0.75rem 0.85rem;
+  border: 1px solid var(--rand);
+  border-radius: 10px;
+  background: var(--kaart);
+  color: var(--gedempt);
+  font-weight: 650;
+  line-height: 1.35;
+  white-space: pre-line;
+}
+.resultaat-status[data-soort="goed"] { border-color: var(--accent-donker); color: var(--accent); }
+.resultaat-status[data-soort="wacht"] { border-color: var(--waarschuwing); color: #e3b341; }
+.resultaat-status[data-soort="fout"] { border-color: var(--fout); color: #ff7b72; }
+/* Na elke poging licht het vak kort op: ook een herhaalde, identieke uitkomst is dan te zien. */
+.resultaat-status.flits { animation: status-flits 0.7s ease-out; }
+@keyframes status-flits {
+  from { background: var(--kaart-licht); transform: scale(1.03); }
+  to { background: var(--kaart); transform: scale(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .resultaat-status.flits { animation: none; }
+}
+
 #resultaat pre {
   max-height: 55vh;
-  margin: 1rem 0;
+  margin: 1.25rem 0 1rem;
   padding: 0.75rem;
   overflow: auto;
   border: 1px solid var(--rand);

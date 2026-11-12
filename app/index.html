@@ -44,12 +44,14 @@
       <p id="log-melding" class="melding verborgen" role="alert"></p>
     </section>
 
-    <section id="resultaat" class="verborgen" aria-live="polite">
+    <section id="resultaat" class="verborgen">
       <h2>Sessie opgeslagen</h2>
-      <p id="resultaat-status" class="notitie"></p>
-      <pre id="sessie-json"></pre>
+      <!-- Status en knoppen staan boven de JSON: zo blijft de terugkoppeling
+           van een sync in beeld naast de knop die hem start. -->
+      <p id="resultaat-status" class="resultaat-status" role="status"></p>
       <button id="resultaat-sync" type="button" class="secundair breed">Nu synchroniseren</button>
       <button id="nieuwe-sessie" type="button" class="primair breed">Nieuwe sessie starten</button>
+      <pre id="sessie-json"></pre>
     </section>
 
     <section id="instellingen" class="verborgen">

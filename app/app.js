@@ -27,6 +27,7 @@ let conceptBronJson = "";
 let nieuwPlanKlaar = null;
 let basisSyncStatus = { tekst: "Sync controleren…", soort: "" };
 let laatsteSyncFout = "";
+let laatsteSyncPoging = null;
 
 const elementen = {
   planNaam: document.getElementById("plan-naam"),
@@ -45,6 +46,7 @@ const elementen = {
   timerTijd: document.getElementById("timer-tijd"),
   rustAudio: document.getElementById("rust-audio"),
   resultaatStatus: document.getElementById("resultaat-status"),
+  resultaatSync: document.getElementById("resultaat-sync"),
   sessieJson: document.getElementById("sessie-json"),
   githubOwner: document.getElementById("github-owner"),
   githubToken: document.getElementById("github-token"),
@@ -113,7 +115,10 @@ function stelGebeurtenissenIn() {
   document.getElementById("push-aanzetten").addEventListener("click", zetMeldingenAan);
   document.getElementById("push-test").addEventListener("click", stuurTestmelding);
   document.getElementById("verbinding-testen").addEventListener("click", testVerbinding);
-  document.getElementById("resultaat-sync").addEventListener("click", synchroniseerWachtrij);
+  elementen.resultaatSync.addEventListener("click", () => {
+    if (leesInstellingen()) synchroniseerWachtrij();
+    else openInstellingen();
+  });
   document.getElementById("nieuwe-sessie").addEventListener("click", startNieuweSessie);
   document.getElementById("nieuw-plan-laden").addEventListener("click", laadNieuwPlan);
   document.getElementById("nieuw-plan-sluit").addEventListener("click", verbergNieuwPlanBanner);
@@ -1571,7 +1576,6 @@ async function rondSessieAf() {
   localStorage.removeItem(OPSLAG.concept);
   stopTimer();
   elementen.sessieJson.textContent = JSON.stringify(sessie, null, 2);
-  elementen.resultaatStatus.textContent = "Veilig lokaal opgeslagen; synchronisatie wordt geprobeerd.";
   elementen.logscherm.classList.add("verborgen");
   elementen.resultaat.classList.remove("verborgen");
   elementen.logActies.classList.add("verborgen");
@@ -1583,7 +1587,6 @@ async function rondSessieAf() {
 async function startNieuweSessie() {
   verbergNieuwPlanBanner();
   elementen.sessieJson.textContent = "";
-  elementen.resultaatStatus.textContent = "";
   elementen.resultaat.classList.add("verborgen");
   elementen.logscherm.classList.remove("verborgen");
   elementen.logActies.classList.remove("verborgen");
@@ -1700,17 +1703,15 @@ async function synchroniseerWachtrij() {
     }
     laatsteSyncFout = "";
     zetBasisSyncStatus("Alles gesynchroniseerd", "goed");
-    elementen.resultaatStatus.textContent = "Gesynchroniseerd met workout-data.";
   } catch (fout) {
     laatsteSyncFout = navigator.onLine ? veiligeFoutmelding(fout) : "Offline · later opnieuw";
     zetBasisSyncStatus(laatsteSyncFout, "fout");
-    if (!elementen.resultaat.classList.contains("verborgen")) {
-      elementen.resultaatStatus.textContent = "Lokaal veilig; synchronisatie volgt automatisch zodra het lukt.";
-    }
     console.warn("Synchronisatie mislukt:", veiligeFoutmelding(fout));
   } finally {
     synchronisatieBezig = false;
+    laatsteSyncPoging = new Date();
     werkSyncStatusBij();
+    flitsResultaatStatus();
   }
 }
 
@@ -1975,6 +1976,51 @@ function werkSyncStatusBij() {
     elementen.syncStatus.textContent = basisSyncStatus.tekst;
     elementen.syncStatus.dataset.soort = basisSyncStatus.soort;
   }
+  werkResultaatSyncBij(aantal);
+}
+
+// Resultaatscherm: het statusvak en de knop zeggen samen waar de sessie staat,
+// zodat een druk op de knop altijd iets zichtbaars oplevert. Een lege wachtrij
+// betekent hier "geüpload": de sessie verlaat de wachtrij pas na de upload.
+function werkResultaatSyncBij(aantal) {
+  const tijd = (opties) => laatsteSyncPoging?.toLocaleTimeString("nl-NL", opties) ?? "";
+  let tekst;
+  let soort = "wacht";
+  let knop = "Nu synchroniseren";
+  let knopUit = false;
+  if (synchronisatieBezig) {
+    tekst = "Synchroniseren…";
+    soort = "";
+    knop = "Synchroniseren…";
+    knopUit = true;
+  } else if (aantal === 0) {
+    const om = tijd({ hour: "2-digit", minute: "2-digit" });
+    tekst = `✓ Gesynchroniseerd met workout-data${om ? ` om ${om}` : ""}.`;
+    soort = "goed";
+    knop = "✓ Gesynchroniseerd";
+    knopUit = true;
+  } else if (!leesInstellingen()) {
+    tekst = "Alleen lokaal opgeslagen: GitHub is nog niet ingesteld.";
+    knop = "GitHub instellen";
+  } else if (laatsteSyncFout) {
+    tekst = `Synchroniseren mislukt om ${tijd()}\n${laatsteSyncFout}\n` +
+      "De sessie staat veilig op dit toestel; de app probeert het vanzelf opnieuw.";
+    soort = "fout";
+    knop = "Opnieuw synchroniseren";
+  } else {
+    tekst = "Veilig lokaal opgeslagen, nog niet gesynchroniseerd.";
+  }
+  elementen.resultaatStatus.textContent = tekst;
+  elementen.resultaatStatus.dataset.soort = soort;
+  elementen.resultaatSync.textContent = knop;
+  elementen.resultaatSync.disabled = knopUit;
+}
+
+function flitsResultaatStatus() {
+  const vak = elementen.resultaatStatus;
+  vak.classList.remove("flits");
+  void vak.offsetWidth; // herstart de animatie
+  vak.classList.add("flits");
 }
 
 function toonLogMelding(tekst) {

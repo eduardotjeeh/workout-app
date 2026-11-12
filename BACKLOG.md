@@ -202,6 +202,19 @@ Wat er veranderd is:
 
 **Bekende grens:** een set die pas na de training wordt afgevinkt, krijgt de tijd van die latere tik. Een sessie die over de app-update heen loopt, heeft alleen tijden voor de sets van na de update; de hub noemt de duur dan een ondergrens.
 
+## W18 — Zichtbare terugkoppeling van de sync op het resultaatscherm ✅ gebouwd (2026-11-12, Fable, v0.14.1)
+
+Na "Sessie afronden" leek "Nu synchroniseren" niets te doen. Oorzaak: afronden synct zelf al, daarna is de wachtrij leeg en keerde `synchroniseerWachtrij` stil terug. De enige melding was een grijze regel boven de JSON.
+
+Wat er veranderd is:
+
+- **Statusvak** (`#resultaat-status`) met kleur per toestand: bezig, gesynchroniseerd (met tijdstip), mislukt (tijdstip op de seconde, reden, "probeert vanzelf opnieuw"), niet ingesteld, wacht. Eén functie, `werkResultaatSyncBij`, zet vak en knop vanuit `werkSyncStatusBij`.
+- **Knop** volgt de toestand: "Synchroniseren…" (uit), "✓ Gesynchroniseerd" (uit), "Opnieuw synchroniseren", "GitHub instellen" (opent de instellingen).
+- **Flits:** na elke poging licht het vak kort op, zodat ook een herhaalde, identieke fout te zien is.
+- **Volgorde:** status en knoppen staan boven de JSON, zodat de terugkoppeling naast de knop in beeld blijft.
+
+**Getest** in Chromium op 375 px met een nagebootste GitHub-API: afronden zonder instellingen, mislukte upload (401) twee keer achter elkaar, geslaagde upload. Niet getest op de iPhone zelf.
+
 ## W6 — Later / ideeën
 
 - Plate calculator (welke schijven op de stang).
