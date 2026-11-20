@@ -446,10 +446,7 @@ function maakSupersetKaart(blok) {
   });
 
   for (let ronde = 0; ronde < rondes; ronde += 1) {
-    const rondeKop = document.createElement("p");
-    rondeKop.className = "ronde-kop";
-    rondeKop.textContent = `Ronde ${ronde + 1}`;
-    kaart.appendChild(rondeKop);
+    kaart.appendChild(maakRondeKop(leden, labels, ronde));
     leden.forEach((lid, positie) => {
       if (!lid.sets[ronde]) return;
       kaart.appendChild(maakSetRegel(lid, lid.sets[ronde], blok.leden[positie], ronde, labels[positie]));
@@ -469,6 +466,47 @@ function maakSupersetKaart(blok) {
   });
   kaart.appendChild(extra);
   return kaart;
+}
+
+// Ronde in één tik (W19): Eduard doet de leden direct na elkaar en vinkt ze
+// daarna samen af. De knop vinkt wat in de ronde nog open staat en laat Skip
+// met rust; een al afgevinkt lid houdt zijn eigen tijd. Daarna volgt de
+// rondrust, via dezelfde regel als bij de laatste losse vink. Staat alles in
+// de ronde al op gedaan, dan zet dezelfde knop de ronde weer open — net als de
+// losse vink, die ook heen en terug gaat.
+function maakRondeKop(leden, labels, ronde) {
+  const kop = document.createElement("div");
+  kop.className = "ronde-kop";
+  const titel = document.createElement("span");
+  titel.textContent = `Ronde ${ronde + 1}`;
+  kop.appendChild(titel);
+
+  const inRonde = leden.filter((lid) => lid.sets[ronde]);
+  const sets = inRonde.map((lid) => lid.sets[ronde]);
+  const open = sets.filter((set) => set.status === "open");
+  const gedaan = sets.filter((set) => set.status === "gedaan");
+  // Met één set in de ronde is de losse vink al één tik; zonder open of
+  // gedane sets (alles Skip) valt er niets af te vinken.
+  if (sets.length < 2 || open.length + gedaan.length === 0) return kop;
+
+  const klaar = open.length === 0;
+  if (klaar) kop.classList.add("klaar");
+  const namen = inRonde.map((lid) => labels[leden.indexOf(lid)]).join(" en ");
+  const knop = maakKnop(klaar ? "✓ Ronde gedaan" : "✓ Ronde afvinken", "ronde-vink",
+    klaar ? `Ronde ${ronde + 1} weer openzetten` : `Ronde ${ronde + 1} afvinken: ${namen}`);
+  knop.addEventListener("click", () => {
+    if (klaar) {
+      gedaan.forEach((set) => { set.status = "open"; zetAfvinktijd(set, false); });
+      bewaarEnRender();
+      return;
+    }
+    open.forEach((set) => { set.status = "gedaan"; zetAfvinktijd(set, true); });
+    bewaarEnRender();
+    // Nog binnen de tik, zodat iOS de rustbel mag starten.
+    startRustNaSet(inRonde.at(-1), ronde);
+  });
+  kop.appendChild(knop);
+  return kop;
 }
 
 function supersetOmschrijving(leden, rondes) {

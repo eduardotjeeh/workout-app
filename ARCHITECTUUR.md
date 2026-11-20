@@ -65,7 +65,7 @@ Superset (optioneel, sinds v0.13, W16): opeenvolgende oefeningen met dezelfde `s
 { "naam": "Triceps Pushdown (Cable)", "superset": "A", "rust_sec": 90, "stap_kg": 2.3, "sets": [ … ] }
 ```
 
-- **Ronde** = set *n* van elk lid. De app toont het blok als één kaart met de sets afwisselend per ronde (A1, A2, A1, A2, …); kg, reps, Skip, extra sets en RPE blijven per oefening.
+- **Ronde** = set *n* van elk lid. De app toont het blok als één kaart met de sets afwisselend per ronde (A1, A2, A1, A2, …); kg, reps, Skip, extra sets en RPE blijven per oefening. Sinds v0.15 (W19) vinkt "✓ Ronde afvinken" in de rondekop alle open sets van die ronde in één tik af; in het sessie-JSON is dat niet te onderscheiden van losse vinken (zelfde `status`, `tijd` op dezelfde seconde).
 - **Rust in een superset:** tussen de leden geen rust — de app start geen timer en stopt een rust die nog liep (ook een geplande melding). Na de ronde volgt de grootste `rust_sec` van het blok. Zet die op het laatste lid en `0` op de andere; dezelfde waarde op alle leden werkt ook. De app kijkt per afgevinkte set of een ander lid in dezelfde ronde nog open staat: zo ja, direct door; zo nee, rondrust. Daardoor klopt het ook bij een andere volgorde in de sportschool, na wisselen in de app en bij een ongelijk aantal sets. Een korte pauze tussen de leden kent het contract niet; wie die wil, plant twee losse oefeningen.
 - Alleen opeenvolgende leden tellen. Een losse oefening met een `superset`-waarde zonder buurman met dezelfde waarde gedraagt zich als een gewone oefening (eigen `rust_sec`). Verplaatsen in de app houdt een blok bij elkaar: een lid schuift binnen het blok, aan de rand verhuist het hele blok.
 - Plannen zonder `superset` werken ongewijzigd.

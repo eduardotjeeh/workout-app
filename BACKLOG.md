@@ -215,6 +215,22 @@ Wat er veranderd is:
 
 **Getest** in Chromium op 375 px met een nagebootste GitHub-API: afronden zonder instellingen, mislukte upload (401) twee keer achter elkaar, geslaagde upload. Niet getest op de iPhone zelf.
 
+## W19 — Superset-ronde in één tik afvinken ✅ gebouwd (2026-11-20, Opus, v0.15.0)
+
+Eduard doet de leden van een superset direct na elkaar en vinkt ze daarna samen af: twee tikken voor één handeling.
+
+- **App:** de rondekop in de superset-kaart heeft rechts een knop "✓ Ronde afvinken". Die vinkt alle open sets van de ronde af, elk met dezelfde afvinktijd, en start daarna de rondrust via dezelfde regel als de laatste losse vink (`startRustNaSet`, nog binnen de tik voor iOS-audio). Een lid dat al los was afgevinkt houdt zijn eigen tijd; Skip blijft Skip. Is de ronde helemaal gedaan, dan wordt de knop groen ("✓ Ronde gedaan") en zet een tik de gedane sets weer open, net als de losse vink. Een ronde met maar één set (ongelijk aantal sets, extra set) krijgt geen knop; alles Skip ook niet.
+- **Contract:** geen wijziging. In het sessie-JSON is een rondetik niet te onderscheiden van twee losse vinken op dezelfde seconde.
+
+**Getest** in Chromium op 375 px met een plan met curl + pushdown als `superset: "A"`, 3 rondes:
+- *Rondetik:* A1 en A2 gedaan op dezelfde seconde, rust 1:30, knop groen.
+- *Eerst A1 los:* geen rust; daarna de rondeknop vinkte alleen A2, A1 hield zijn eigen tijd, rust 1:30.
+- *A2 op Skip:* de rondeknop vinkte alleen A1 en startte de rondrust.
+- *Heropenen:* tik op "Ronde gedaan" zette beide sets open en wiste `tijd`.
+- *Extra set A1:* ronde 4 zonder knop. Herladen behield alles. Geen horizontale scroll, geen consolefouten.
+
+Niet getest op de iPhone zelf.
+
 ## W6 — Later / ideeën
 
 - Plate calculator (welke schijven op de stang).
