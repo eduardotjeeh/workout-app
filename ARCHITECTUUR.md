@@ -72,6 +72,33 @@ Superset (optioneel, sinds v0.13, W16): opeenvolgende oefeningen met dezelfde `s
 
 In het sessie-JSON komt `superset` ongewijzigd terug op elke oefening die het in het plan had. De sets blijven per oefening staan (ronde *n* = set *n*), dus de hub ziet dat de oefening in superset is gedaan — RPE's daaruit zijn niet vergelijkbaar met losse sets.
 
+Eenheid (optioneel, sinds v0.16, W20): `"eenheid": "lb"` op een oefening laat de app het gewicht in ponden tonen en verstellen; `"kg"` of geen veld is kg. **Het contract blijft in kg**: `kg` in plan en sessie, `stap_kg`, `vorige` en `verschil` staan altijd in kg (op 0,1 kg), de app rekent alleen voor het scherm om (1 lb = 0,45359237 kg).
+
+- Afspraak: kabel- en gewichtenstapels (Eduards stapels zijn in lbs gemarkeerd, `stap_kg` 2,3 / 1,1 / 4,5 / 3,4) krijgen `"lb"`; schijfgeladen oefeningen (`stap_kg` 5) en dumbbells blijven kg.
+- Tonen: kg → lb, afgerond op 0,5 lb (de 0,1 kg-afronding is hooguit 0,11 lb, dus 45,4 kg leest weer als 100 lb). Invoeren en verstellen gaan in lb; de app bewaart `round(lb × 0,45359237, 1)` kg.
+- De +/−-stap in lb is `stap_kg` omgerekend en afgerond op 2,5 lb: 2,3 → 5, 1,1 → 2,5, 4,5 → 10, 3,4 → 7,5.
+- In het oefeningmenu wisselt "kg ⇄ lb" de eenheid, bijvoorbeeld bij een vervanging door een machine met een stapel. `eenheid` komt ongewijzigd (of zoals gewisseld) terug in het sessie-JSON.
+
+Vorige keer (optioneel, sinds v0.16, W20): het blok `vorige` per oefening vergelijkt het plan met wat Eduard de vorige keer werkelijk deed. **De hub rekent het uit, nooit met de hand:** `Gezondheid/scripts/planvergelijking.py` vult het in, met dezelfde vergelijking als het dashboard. De app toont het als één regel onder de naam van de oefening, met een klein label voor de wijziging.
+
+```json
+"vorige": {
+  "datum": "2026-11-12",
+  "sets": [{ "kg": 35, "reps": 10 }, { "kg": 35, "reps": 10 }],
+  "rpe": 7.5,
+  "wijziging": "kg_op",
+  "verschil": 5
+}
+```
+
+- `datum`: de laatste trainingsdag vóór `gepland_op` waarop de oefening (onder dezelfde naam, aliassen inbegrepen) minstens één gedane werkset had. `sets`: alleen die gedane werksets, zonder opwarmsets. `rpe` (optioneel): zoals die dag gelogd, nooit geschat. `superset: true` (optioneel): de oefening is die dag in een superset gedaan.
+- `wijziging` vergelijkt het plan met die sets in deze volgorde: zwaarste gewicht (`kg_op` / `kg_af`, `verschil` in kg), dan het aantal sets (`sets_op` / `sets_af`, `verschil` in sets), dan het totaal aan reps op het zwaarste gewicht (`reps_op` / `reps_af`, `verschil` in reps), anders `gelijk` (zonder `verschil`).
+- Heeft de oefening geen geschiedenis, dan is het blok alleen `{ "wijziging": "nieuw" }`.
+- Een stap terug (`*_af`) is bijna altijd gepland; de app toont hem neutraal, niet als verlies.
+- Bij een vervanging in de app (`vervangen_van`) verbergt de app de regel, want die hoort bij de oorspronkelijke oefening.
+- Resultaatscherm: na het afronden vergelijkt de app de gedane werksets met `vorige`, in dezelfde volgorde als hierboven, en toont per oefening het verschil plus een telling (vooruit · gelijk · terug). Dat is alleen voor het scherm; de hub blijft de analyse doen.
+- `vorige` komt niet terug in het sessie-JSON.
+
 ### `sessies/JJJJ-MM-DD.json` — geschreven door de app
 
 Zelfde structuur als het plan, aangevuld met wat er werkelijk gebeurde:
@@ -115,6 +142,7 @@ Regels:
 - `rpe` (optioneel, 6–10 in stappen van 0,5) staat op de laatste gedane werkset van een oefening.
 - Vervangt Eduard een oefening in de sportschool (machine bezet), dan krijgt de oefening `"vervangen_van": "<oorspronkelijke naam>"`; de `gepland_*`-waarden van het origineel blijven staan als referentie.
 - `superset` (optioneel) komt ongewijzigd uit het plan terug; zie de superset-alinea bij het plan. Een vervangen lid houdt zijn `superset`.
+- `eenheid` (optioneel, sinds v0.16) staat erbij als de oefening in lb is getoond. De `kg` blijven kg.
 - `datum` en bestandsnaam = trainingsdatum (lokale tijd): de dag van `eerste_set`, en zonder tijden de dag van `gestart`. Tweede sessie op één dag: `-2` suffix.
 - Kg met decimale punt, JSON in UTF-8.
 

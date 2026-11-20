@@ -47,6 +47,7 @@ const elementen = {
   rustAudio: document.getElementById("rust-audio"),
   resultaatStatus: document.getElementById("resultaat-status"),
   resultaatSync: document.getElementById("resultaat-sync"),
+  resultaatVergelijking: document.getElementById("resultaat-vergelijking"),
   sessieJson: document.getElementById("sessie-json"),
   githubOwner: document.getElementById("github-owner"),
   githubToken: document.getElementById("github-token"),
@@ -255,6 +256,8 @@ function maakWerkplan(ruwPlan) {
     oefeningen: ruwPlan.oefeningen.map((oefening) => ({
       naam: oefening.naam,
       ...(supersetId(oefening) ? { superset: supersetId(oefening) } : {}),
+      ...(oefening.eenheid === "lb" ? { eenheid: "lb" } : {}),
+      ...(leesVorige(oefening.vorige) ? { vorige: leesVorige(oefening.vorige) } : {}),
       rust_sec: Number.isFinite(oefening.rust_sec) ? oefening.rust_sec : 0,
       stap_kg: oefening.stap_kg === "dumbbell" ? "dumbbell"
         : (Number.isFinite(oefening.stap_kg) && oefening.stap_kg > 0 ? oefening.stap_kg : 2.5),
@@ -276,6 +279,187 @@ function maakWerkplan(ruwPlan) {
       })),
     })),
   };
+}
+
+// Eenheid (W20): het contract is in kg, maar Eduards kabel- en gewichtenstapels
+// zijn in lbs gemarkeerd. Bij `eenheid: "lb"` toont en verstelt de app ponden en
+// bewaart hij kg op 0,1 kg; 45,4 kg leest zo weer als 100 lb. Dumbbells blijven kg.
+const KG_PER_LB = 0.45359237;
+
+function inLb(oefening) {
+  return oefening?.eenheid === "lb" && oefening.stap_kg !== "dumbbell";
+}
+
+function eenheidVan(oefening) {
+  return inLb(oefening) ? "lb" : "kg";
+}
+
+function kgNaarScherm(oefening, kg) {
+  if (!Number.isFinite(kg) || !inLb(oefening)) return kg;
+  return Math.round((kg / KG_PER_LB) * 2) / 2;
+}
+
+function schermNaarKg(oefening, waarde) {
+  if (!Number.isFinite(waarde) || !inLb(oefening)) return waarde;
+  return Math.round(waarde * KG_PER_LB * 10) / 10;
+}
+
+function toonGewicht(oefening, kg) {
+  return `${_toonKg(kgNaarScherm(oefening, kg))} ${eenheidVan(oefening)}`;
+}
+
+// Vorige keer (W20): de hub zet per oefening wat Eduard de vorige keer deed en
+// hoe het plan daarvan afwijkt. De app rekent daar niets aan; hij toont het.
+const WIJZIGINGEN = ["nieuw", "gelijk", "kg_op", "kg_af", "sets_op", "sets_af", "reps_op", "reps_af"];
+
+function leesVorige(vorige) {
+  if (!vorige || typeof vorige !== "object" || !WIJZIGINGEN.includes(vorige.wijziging)) return null;
+  if (vorige.wijziging === "nieuw") return { wijziging: "nieuw" };
+  const sets = Array.isArray(vorige.sets)
+    ? vorige.sets.filter((set) => Number.isFinite(set?.kg) && Number.isFinite(set?.reps) && set.reps >= 1)
+        .map((set) => ({ kg: set.kg, reps: set.reps }))
+    : [];
+  if (typeof vorige.datum !== "string" || !sets.length) return null;
+  return {
+    datum: vorige.datum,
+    sets,
+    ...(Number.isFinite(vorige.rpe) ? { rpe: vorige.rpe } : {}),
+    ...(vorige.superset === true ? { superset: true } : {}),
+    wijziging: vorige.wijziging,
+    ...(Number.isFinite(vorige.verschil) ? { verschil: vorige.verschil } : {}),
+  };
+}
+
+// Zelfde volgorde als dashboard.vergelijk_sets in de hub: zwaarste gewicht, dan
+// aantal sets, dan reps op het zwaarste gewicht. Alleen voor het resultaatscherm.
+function bovenste(sets) {
+  const top = Math.max(...sets.map((set) => set.kg));
+  return { top, reps: sets.filter((set) => Math.abs(set.kg - top) < 1e-9).map((set) => set.reps) };
+}
+
+function vergelijkSets(sets, vorigeSets) {
+  const nu = bovenste(sets);
+  const toen = bovenste(vorigeSets);
+  const som = (reps) => reps.reduce((totaal, r) => totaal + r, 0);
+  if (nu.top > toen.top + 1e-9) return { wijziging: "kg_op", verschil: Math.round((nu.top - toen.top) * 10) / 10 };
+  if (nu.top < toen.top - 1e-9) return { wijziging: "kg_af", verschil: Math.round((toen.top - nu.top) * 10) / 10 };
+  if (sets.length !== vorigeSets.length) {
+    return { wijziging: sets.length > vorigeSets.length ? "sets_op" : "sets_af",
+      verschil: Math.abs(sets.length - vorigeSets.length) };
+  }
+  if (som(nu.reps) !== som(toen.reps)) {
+    return { wijziging: som(nu.reps) > som(toen.reps) ? "reps_op" : "reps_af",
+      verschil: Math.abs(som(nu.reps) - som(toen.reps)) };
+  }
+  return { wijziging: "gelijk" };
+}
+
+function richtingVan(wijziging) {
+  if (wijziging.endsWith("_op")) return "op";
+  if (wijziging.endsWith("_af")) return "af";
+  return wijziging;
+}
+
+// Het label naast "Vorige …": ▲ +5 lb, +1 rep/set, −1 set, zelfde, nieuw. Een
+// stap terug staat er neutraal bij; die is bijna altijd gepland.
+function wijzigingTekst(oefening, wijziging, verschil, sets) {
+  const teken = richtingVan(wijziging) === "op" ? "+" : "−";
+  const pijl = richtingVan(wijziging) === "op" ? "▲ " : "";
+  if (wijziging === "kg_op" || wijziging === "kg_af") {
+    const waarde = inLb(oefening) ? Math.round((verschil / KG_PER_LB) * 2) / 2 : verschil;
+    return `${pijl}${teken}${_toonKg(waarde)} ${eenheidVan(oefening)}`;
+  }
+  if (wijziging === "sets_op" || wijziging === "sets_af") return `${pijl}${teken}${verschil} set${verschil === 1 ? "" : "s"}`;
+  if (wijziging === "reps_op" || wijziging === "reps_af") {
+    const opTop = bovenste(sets).reps.length;
+    if (opTop > 1 && verschil % opTop === 0) return `${pijl}${teken}${verschil / opTop} rep/set`;
+    return `${pijl}${teken}${verschil} rep${verschil === 1 ? "" : "s"}`;
+  }
+  return wijziging === "gelijk" ? "zelfde" : "nieuw";
+}
+
+function maakWijzigingLabel(tekst, richting) {
+  const label = document.createElement("span");
+  label.className = `wijziging-label ${richting}`;
+  label.textContent = tekst;
+  return label;
+}
+
+function formatDagMaand(iso) {
+  const [, maand, dag] = iso.split("-");
+  return `${dag}-${maand}`;
+}
+
+function setsTekst(oefening, sets) {
+  const gewichten = [...new Set(sets.map((set) => set.kg))];
+  if (gewichten.length > 1) return sets.map((set) => `${toonGewicht(oefening, set.kg)} × ${set.reps}`).join(", ");
+  const reps = sets.map((set) => set.reps);
+  const deel = reps.every((r) => r === reps[0]) ? `${sets.length} × ${reps[0]}` : reps.join(", ");
+  return `${deel} op ${toonGewicht(oefening, gewichten[0])}`;
+}
+
+function maakVorigeRegel(oefening) {
+  const vorige = oefening.vorige;
+  if (!vorige || oefening.vervangen_van || oefening.extra) return null;
+  const regel = document.createElement("p");
+  regel.className = "vorige-regel";
+  const tekst = document.createElement("span");
+  if (vorige.wijziging === "nieuw") {
+    tekst.textContent = "Eerste keer";
+    regel.append(tekst, maakWijzigingLabel("nieuw", "nieuw"));
+    return regel;
+  }
+  let rpe = "";
+  if (Number.isFinite(vorige.rpe)) {
+    const anders = Boolean(vorige.superset) !== Boolean(supersetId(oefening));
+    rpe = ` · RPE ${_toonKg(vorige.rpe)}${anders ? (vorige.superset ? " (superset)" : " (los)") : ""}`;
+  }
+  tekst.textContent = `${formatDagMaand(vorige.datum)}: ${setsTekst(oefening, vorige.sets)}${rpe}`;
+  const planSets = oefening.sets.filter((set) => !set.extra && Number.isFinite(set.gepland_kg))
+    .map((set) => ({ kg: set.gepland_kg, reps: set.gepland_reps }));
+  regel.append(tekst, maakWijzigingLabel(
+    wijzigingTekst(oefening, vorige.wijziging, vorige.verschil, planSets), richtingVan(vorige.wijziging)));
+  return regel;
+}
+
+// Resultaatscherm (W20): wat er werkelijk gedaan is tegenover de vorige keer.
+function toonVergelijking() {
+  const vak = elementen.resultaatVergelijking;
+  vak.replaceChildren();
+  const regels = [];
+  plan.oefeningen.forEach((oefening) => {
+    const vorige = oefening.vorige;
+    if (!vorige?.sets || oefening.vervangen_van || oefening.extra) return;
+    const gedaan = oefening.sets
+      .filter((set) => set.status === "gedaan" && Number.isFinite(set.kg) && Number.isFinite(set.reps) && set.reps >= 1)
+      .map((set) => ({ kg: set.kg, reps: set.reps }));
+    if (!gedaan.length) return;
+    const { wijziging, verschil } = vergelijkSets(gedaan, vorige.sets);
+    const richting = richtingVan(wijziging);
+    let tekst = wijzigingTekst(oefening, wijziging, verschil, gedaan);
+    if (richting === "af" && richtingVan(vorige.wijziging) === "af") tekst += " · gepland";
+    regels.push({ naam: oefening.naam, tekst, richting });
+  });
+  if (!regels.length) {
+    vak.classList.add("verborgen");
+    return;
+  }
+  const tel = (richting) => regels.filter((regel) => regel.richting === richting).length;
+  const kop = document.createElement("h3");
+  kop.textContent = "Tegenover vorige keer";
+  const telling = document.createElement("p");
+  telling.className = "vergelijking-telling";
+  telling.textContent = `${tel("op")} vooruit · ${tel("gelijk")} gelijk · ${tel("af")} terug`;
+  const lijst = document.createElement("ul");
+  regels.forEach((regel) => {
+    const item = document.createElement("li");
+    const naam = document.createElement("span");
+    naam.textContent = regel.naam;
+    item.append(naam, maakWijzigingLabel(regel.tekst, regel.richting));
+    lijst.appendChild(item);
+  });
+  vak.append(kop, telling, lijst);
+  vak.classList.remove("verborgen");
 }
 
 // Supersets (W16): opeenvolgende oefeningen met dezelfde `superset`-tekst
@@ -548,14 +732,24 @@ function maakOefeningKop(oefening, oefeningIndex, label = "") {
     titel.textContent = oefening.naam;
     titelvak.appendChild(titel);
   }
+  if (inLb(oefening)) {
+    const tag = document.createElement("span");
+    tag.className = "eenheid-tag";
+    tag.textContent = "lb";
+    tag.title = "Gewicht in ponden";
+    titelvak.appendChild(tag);
+  }
   kop.appendChild(titelvak);
-  const menuKnop = maakKnop("⋯", "icoonknop", "Oefeningmenu: verplaatsen of vervangen");
+  const menuKnop = maakKnop("⋯", "icoonknop", "Oefeningmenu: verplaatsen, vervangen of eenheid");
   menuKnop.addEventListener("click", () => {
     oefening.menuOpen = !oefening.menuOpen;
     bewaarEnRender();
   });
   kop.appendChild(menuKnop);
   lid.appendChild(kop);
+
+  const vorigeRegel = maakVorigeRegel(oefening);
+  if (vorigeRegel) lid.appendChild(vorigeRegel);
 
   if (oefening.vervangen_van) {
     const vervangenTekst = document.createElement("p");
@@ -604,7 +798,7 @@ function maakOefeningKop(oefening, oefeningIndex, label = "") {
     });
     const tekst = document.createElement("span");
     tekst.className = "opwarm-tekst";
-    tekst.textContent = `${label ? `${label} · ` : ""}opwarmen · ${_toonKg(set.kg)} kg × ${set.reps}`;
+    tekst.textContent = `${label ? `${label} · ` : ""}opwarmen · ${toonGewicht(oefening, set.kg)} × ${set.reps}`;
     regel.append(vink, tekst);
     lid.appendChild(regel);
   });
@@ -651,6 +845,20 @@ function maakOefeningMenu(oefening, oefeningIndex) {
       if (invoer) { invoer.focus(); invoer.select(); }
     });
     rij.appendChild(vervang);
+  }
+
+  // Kg of lb, bijvoorbeeld als een vervanging op een stapel staat. Dumbbells blijven kg.
+  if (oefening.stap_kg !== "dumbbell") {
+    const naarLb = !inLb(oefening);
+    const eenheid = maakKnop(naarLb ? "⇄ lb" : "⇄ kg", "secundair compact",
+      naarLb ? "Gewicht in ponden tonen" : "Gewicht in kilo tonen");
+    eenheid.addEventListener("click", () => {
+      if (naarLb) oefening.eenheid = "lb";
+      else delete oefening.eenheid;
+      oefening.menuOpen = false;
+      bewaarEnRender();
+    });
+    rij.appendChild(eenheid);
   }
   return rij;
 }
@@ -775,24 +983,31 @@ function metTijd(item, gedaan) {
   return gedaan && typeof item.tijd === "string" ? { tijd: item.tijd } : {};
 }
 
+// Stap in de eenheid van het scherm. In lb is dat `stap_kg` omgerekend op 2,5 lb
+// afgerond: 2,3 → 5, 1,1 → 2,5, 4,5 → 10, 3,4 → 7,5.
 function stapVoor(oefening, veld, basis, richting) {
   if (veld !== "kg") return 1;
   if (oefening.stap_kg === "dumbbell") {
     // Dumbbellrek: 1 kg-stappen t/m 10 kg, daarboven 2 kg-stappen.
     return (richting > 0 ? basis >= 10 : basis > 10) ? 2 : 1;
   }
-  return Number.isFinite(oefening.stap_kg) && oefening.stap_kg > 0 ? oefening.stap_kg : 2.5;
+  const stapKg = Number.isFinite(oefening.stap_kg) && oefening.stap_kg > 0 ? oefening.stap_kg : 2.5;
+  if (inLb(oefening)) return Math.max(2.5, Math.round(stapKg / KG_PER_LB / 2.5) * 2.5);
+  return stapKg;
 }
 
 function maakStepper(oefening, set, veld) {
   const groep = document.createElement("div");
   groep.className = `stepper stepper-${veld}`;
-  const eenheid = veld === "kg" ? "kg" : "reps";
+  const eenheid = veld === "kg" ? eenheidVan(oefening) : "reps";
 
+  // Verstellen gaat in de eenheid van het scherm; bewaard wordt kg.
   const pasAan = (richting) => {
-    const basis = Number.isFinite(set[veld]) ? set[veld] : (set[`gepland_${veld}`] ?? 0);
+    const basisKg = Number.isFinite(set[veld]) ? set[veld] : (set[`gepland_${veld}`] ?? 0);
+    const basis = veld === "kg" ? kgNaarScherm(oefening, basisKg) : basisKg;
     const stap = stapVoor(oefening, veld, basis, richting);
-    set[veld] = Math.max(0, Math.round((basis + richting * stap) * 100) / 100);
+    const nieuw = Math.max(0, Math.round((basis + richting * stap) * 100) / 100);
+    set[veld] = veld === "kg" ? schermNaarKg(oefening, nieuw) : nieuw;
     bewaarEnRender();
   };
 
@@ -804,21 +1019,23 @@ function maakStepper(oefening, set, veld) {
   minKnop.disabled = uitgeschakeld;
   plusKnop.disabled = uitgeschakeld;
 
-  groep.append(minKnop, maakInvoer(set, veld, eenheid), plusKnop);
+  groep.append(minKnop, maakInvoer(oefening, set, veld, eenheid), plusKnop);
   return groep;
 }
 
-function maakInvoer(set, veld, eenheid) {
+function maakInvoer(oefening, set, veld, eenheid) {
+  const gewicht = veld === "kg";
   const input = document.createElement("input");
   input.type = "number";
-  input.inputMode = veld === "kg" ? "decimal" : "numeric";
+  input.inputMode = gewicht ? "decimal" : "numeric";
   input.min = "0";
-  input.step = veld === "kg" ? "0.1" : "1";
-  input.value = set[veld] ?? "";
+  input.step = gewicht ? (inLb(oefening) ? "0.5" : "0.1") : "1";
+  input.value = (gewicht ? kgNaarScherm(oefening, set.kg) : set[veld]) ?? "";
   input.setAttribute("aria-label", eenheid);
   input.disabled = set.status === "overgeslagen";
   input.addEventListener("input", () => {
-    set[veld] = getalUitInvoer(input);
+    const waarde = getalUitInvoer(input);
+    set[veld] = gewicht ? schermNaarKg(oefening, waarde) : waarde;
     bewaarConcept(true);
   });
   return input;
@@ -1613,6 +1830,7 @@ async function rondSessieAf() {
 
   localStorage.removeItem(OPSLAG.concept);
   stopTimer();
+  toonVergelijking();
   elementen.sessieJson.textContent = JSON.stringify(sessie, null, 2);
   elementen.logscherm.classList.add("verborgen");
   elementen.resultaat.classList.remove("verborgen");
@@ -1625,6 +1843,8 @@ async function rondSessieAf() {
 async function startNieuweSessie() {
   verbergNieuwPlanBanner();
   elementen.sessieJson.textContent = "";
+  elementen.resultaatVergelijking.replaceChildren();
+  elementen.resultaatVergelijking.classList.add("verborgen");
   elementen.resultaat.classList.add("verborgen");
   elementen.logscherm.classList.remove("verborgen");
   elementen.logActies.classList.remove("verborgen");
@@ -1636,7 +1856,7 @@ function valideerSessie() {
     if (!oefening.naam.trim()) return "Vul de naam in van elke extra of vervangende oefening.";
     for (const set of oefening.sets) {
       if (set.status === "gedaan") {
-        if (!Number.isFinite(set.kg) || set.kg < 0) return `Vul geldige kg in bij ${oefening.naam}.`;
+        if (!Number.isFinite(set.kg) || set.kg < 0) return `Vul een geldig gewicht in bij ${oefening.naam}.`;
         if (!Number.isFinite(set.reps) || set.reps < 0 || !Number.isInteger(set.reps)) {
           return `Vul een heel aantal reps in bij ${oefening.naam}.`;
         }
@@ -1669,6 +1889,7 @@ function bouwSessieJson() {
   sessie.oefeningen = plan.oefeningen.map((oefening) => {
       const resultaat = { naam: oefening.naam.trim() };
       if (supersetId(oefening)) resultaat.superset = supersetId(oefening);
+      if (inLb(oefening)) resultaat.eenheid = "lb";
       resultaat.sets = oefening.sets.map(maakContractSet);
       if (oefening.opwarm_sets?.length) {
         resultaat.opwarm_sets = oefening.opwarm_sets.map((set) => ({

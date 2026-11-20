@@ -12,7 +12,19 @@
         { "kg": 60, "reps": 5 },
         { "kg": 60, "reps": 5 },
         { "kg": 60, "reps": 5 }
-      ]
+      ],
+      "stap_kg": 5,
+      "vorige": {
+        "datum": "2026-07-15",
+        "sets": [
+          { "kg": 55, "reps": 5 },
+          { "kg": 55, "reps": 5 },
+          { "kg": 55, "reps": 5 }
+        ],
+        "rpe": 7.5,
+        "wijziging": "kg_op",
+        "verschil": 5
+      }
     },
     {
       "naam": "Bench press",
@@ -21,16 +33,32 @@
         { "kg": 50, "reps": 8 },
         { "kg": 50, "reps": 8 },
         { "kg": 50, "reps": 8 }
-      ]
+      ],
+      "stap_kg": 5,
+      "vorige": { "wijziging": "nieuw" }
     },
     {
       "naam": "Lat pulldown",
       "rust_sec": 90,
       "sets": [
-        { "kg": 45, "reps": 10 },
-        { "kg": 45, "reps": 10 },
-        { "kg": 45, "reps": 10 }
-      ]
+        { "kg": 45.4, "reps": 10 },
+        { "kg": 45.4, "reps": 10 },
+        { "kg": 45.4, "reps": 10 }
+      ],
+      "stap_kg": 2.3,
+      "eenheid": "lb",
+      "notitie": "Pen 100 lbs.",
+      "vorige": {
+        "datum": "2026-07-15",
+        "sets": [
+          { "kg": 45.4, "reps": 11 },
+          { "kg": 45.4, "reps": 11 },
+          { "kg": 45.4, "reps": 11 }
+        ],
+        "rpe": 9.5,
+        "wijziging": "reps_af",
+        "verschil": 3
+      }
     }
   ]
 }

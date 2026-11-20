@@ -315,12 +315,14 @@ button.ronde-vink {
 .superset-extra { display: flex; gap: 0.5rem; margin-top: 0.6rem; }
 .superset-extra .set-toevoegen { margin-top: 0; }
 
+/* Twee kolommen: met de eenheidknop (W20) zijn het vier knoppen, te veel voor één rij op 375 px. */
 .oefening-menu {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: 0.5rem;
   margin: 0.6rem 0 0.25rem;
 }
-.oefening-menu > * { flex: 1; }
+.oefening-menu > * { min-width: 0; }
 button.gevaar { color: #ff7b72; }
 
 .rpe-rij {
@@ -470,6 +472,62 @@ button.rpe-knop.actief {
 @media (prefers-reduced-motion: reduce) {
   .resultaat-status.flits { animation: none; }
 }
+
+/* W20: vorige keer onder de oefening en tegenover vorige keer na het afronden. */
+.vorige-regel {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.2rem 0.45rem;
+  margin-top: 0.2rem;
+  color: var(--gedempt);
+  font-size: 0.82rem;
+  line-height: 1.3;
+}
+
+.wijziging-label {
+  flex-shrink: 0;
+  padding: 0.05rem 0.4rem;
+  border: 1px solid var(--rand);
+  border-radius: 999px;
+  color: var(--gedempt);
+  font-size: 0.75rem;
+  font-weight: 650;
+  white-space: nowrap;
+}
+.wijziging-label.op { border-color: var(--accent-donker); color: var(--accent); }
+
+.eenheid-tag {
+  flex-shrink: 0;
+  padding: 0 0.3rem;
+  border: 1px solid var(--rand);
+  border-radius: 6px;
+  color: var(--gedempt);
+  font-size: 0.72rem;
+  font-weight: 650;
+  line-height: 1.35;
+}
+
+.vergelijking {
+  margin-top: 1rem;
+  padding: 0.75rem 0.85rem;
+  border: 1px solid var(--rand);
+  border-radius: 10px;
+  background: var(--kaart);
+}
+.vergelijking h3 { margin: 0; font-size: 1rem; }
+.vergelijking-telling { margin-top: 0.2rem; color: var(--gedempt); font-size: 0.85rem; }
+.vergelijking ul { margin: 0.5rem 0 0; padding: 0; list-style: none; }
+.vergelijking li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  padding: 0.35rem 0;
+  border-top: 1px solid var(--rand);
+  font-size: 0.9rem;
+}
+.vergelijking li span:first-child { min-width: 0; overflow-wrap: anywhere; }
 
 #resultaat pre {
   max-height: 55vh;

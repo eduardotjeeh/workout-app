@@ -231,6 +231,27 @@ Eduard doet de leden van een superset direct na elkaar en vinkt ze daarna samen 
 
 Niet getest op de iPhone zelf.
 
+## W20 — Vorige keer per oefening, stapels in lb ✅ gebouwd (2026-11-20, Opus, v0.16.0)
+
+Eduard wil per oefening zien wat hij de vorige keer deed en wat er nu verandert. Dat motiveert, en hij weet meteen hoe de oefening gaat voelen, ook bij een bewuste stap terug. Het dashboard rekende die vergelijking al uit; nu staat hij ook in de app. Daarnaast: de stapels in zijn sportschool zijn in lbs gemarkeerd, dus de app toont ze nu ook in lb.
+
+- **Hub:** `Gezondheid/scripts/planvergelijking.py` vult per oefening het blok `vorige` in `plan/next.json` (datum, gedane werksets, gelogde RPE, superset ja/nee, `wijziging` + `verschil`). Het gebruikt `dashboard.vergelijk_sets`, dus app en dashboard zeggen hetzelfde. `plancontrole.py` keurt de vorm en rekent het blok opnieuw uit: een afwijking is een fout (verouderd of met de hand gezet). Een stapeloefening zonder `eenheid: "lb"` geeft een waarschuwing.
+- **App, oefeningkaart:** onder de naam één gedempte regel, bijvoorbeeld `12-11: 3 × 10 op 100 lb · RPE 8,5`, met een label: groen bij vooruit (`▲ +5 kg`, `▲ +1 rep/set`), grijs bij gelijk (`zelfde`) en bij een stap terug (`−1 rep/set`). Een stap terug is bijna altijd gepland en staat er dus niet in rood. Bij een vervanging of extra oefening is er geen regel. Een RPE uit een superset tegenover een losse oefening (of andersom) krijgt "(superset)" of "(los)".
+- **App, eenheid:** bij `eenheid: "lb"` staat "lb" naast de naam, en staan sets, opwarmsets en de vorige-regel in lb (op 0,5 lb). De +/− stapt in lb: 2,3 kg → 5 lb, 1,1 → 2,5, 4,5 → 10. Bewaard en gesynct wordt kg op 0,1 kg; 100 lb blijft 45,4 kg. Het oefeningmenu heeft "⇄ lb / ⇄ kg" voor vervangingen, behalve bij dumbbells. Het menu staat daarom in twee kolommen.
+- **App, resultaatscherm:** onder de knoppen staat "Tegenover vorige keer": per oefening wat er werkelijk gedaan is tegenover `vorige`, plus de telling vooruit · gelijk · terug. Een stap terug die ook zo gepland was krijgt "· gepland". Dit gebruikt dezelfde volgorde als de hub (`vergelijkSets`) en is alleen voor het scherm.
+- **Contract:** `eenheid` en `vorige` zijn optioneel (ARCHITECTUUR §Eenheid en §Vorige keer). `eenheid` komt terug in het sessie-JSON, `vorige` niet. Een oudere app negeert beide.
+
+**Getest:** hub-tests 38/38 groen (nieuw: `tests/test_planvergelijking.py`, plus uitbreidingen in `test_plancontrole.py`). Het echte plan van 20-11 is in een proefkopie verrijkt, met alleen `vorige`-blokken in de diff, en op `eenheid` gezet; daarna `plancontrole` OK zonder waarschuwingen. In Chromium op 375 px met dat plan:
+- regels en labels per oefening klopten;
+- lb-waarden 20/60/100 en opwarmset 55 lb;
+- + op 20 lb gaf 25 lb = 11,3 kg; 60 lb + gaf 70 lb = 31,8 kg;
+- typen van 65 lb gaf 29,5 kg;
+- kg ⇄ lb op de chest press toonde 88 lb, met 40 kg ongewijzigd;
+- het resultaatscherm na een volledige sessie (één curlset Skip) gaf 3 vooruit · 1 gelijk · 3 terug, met "gepland" bij raise en pushdown;
+- de sessie-JSON stond in kg, met `eenheid` en zonder `vorige`.
+
+Geen horizontale scroll, geen consolefouten. Niet getest op de iPhone zelf.
+
 ## W6 — Later / ideeën
 
 - Plate calculator (welke schijven op de stang).
